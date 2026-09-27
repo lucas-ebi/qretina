@@ -1,37 +1,32 @@
 # ResQR
 
-ResQR moves files and signed programs between devices as a stream of QR codes, shown on one screen
-and filmed by another device's camera. It needs no network, pairing or radio. A rateless erasure
-code lets the receiver miss any frames and join at any point; it needs about n + 2 frames for n
-blocks of data.
+ResQR moves files and signed programs between phones as a stream of QR codes: one screen shows them,
+another phone's camera films them. It needs no network, pairing or radio. A rateless erasure code
+lets the receiver miss any codes and start at any point; it needs about n + 2 codes for n blocks.
 
-Status: the protocol and command-line tool are in place; the Android and iOS app is in progress.
+- App for Android and iOS (Expo), working offline: receive, broadcast, library, signed programs.
+- Command line for broadcasting from a computer (looping GIFs) and for signing.
+- Protocol specified in `spec/resqr.yaml`, with a reference implementation in JavaScript and the
+  transfer layer in C++.
 
-## Layout
+Documentation: [docs/](docs/index.md) (published on Read the Docs).
 
-| Path | Content |
-|---|---|
-| `spec/resqr.yaml` | Protocol parameters and test vectors; the protocol identifier is derived from them |
-| `docs/protocol.md` | Explanation of the protocol |
-| `protocol/` | Reference implementation (plain JavaScript): frames, erasure code, containers, GIF output |
-| `tools/resqr.mjs` | Command line: keys, signing, frames and GIFs |
-| `examples/snake.html` | A small HTML program, used as a signed test payload |
-| `test/` | Tests (`npm test`) |
+## Build and test
 
-## Use
-
-Node 20 or newer.
+Node 22.18 or newer.
 
 ```
 npm install
 npm test
-node tools/resqr.mjs file photo.jpg --gif photo.gif
-node tools/resqr.mjs keygen
-node tools/resqr.mjs sign examples/snake.html --id snake --gif snake.gif
+npm run typecheck -w @resqr/app
+cd app && npx expo run:android      # or run:ios, on macOS
 ```
 
-A GIF loops forever and starts each loop with a three-second countdown of QR codes of the link
-`HTTPS://RESQR.APP/SCAN`, which opens the app. Run `node tools/resqr.mjs` for all options.
+## Status
+
+The protocol, command line and C++ core are tested. The app type-checks and bundles for both
+platforms, but has not yet been run on a device. The C++ core is not yet connected to the app,
+which uses the JavaScript implementation.
 
 ## Licence
 

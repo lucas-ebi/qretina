@@ -1,7 +1,7 @@
 # Security policy
 
 ResQR receives data and signed programs over an optical channel. Its security model is described in
-[docs/protocol.md](docs/protocol.md). Reports of weaknesses in that model are welcome.
+[docs/security.md](docs/security.md). Reports of weaknesses in that model are welcome.
 
 ## Reporting a vulnerability
 

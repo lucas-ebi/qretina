@@ -32,7 +32,12 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   android: {
     package: 'app.resqr',
     adaptiveIcon: { foregroundImage: './assets/icon.png', backgroundColor: '#000000' },
-    blockedPermissions: release ? ['android.permission.INTERNET'] : [],
+    // Only the camera is needed. The app sets its own window's brightness, not the system's; the
+    // development server needs the network and overlays, which release builds drop.
+    blockedPermissions: [
+      'android.permission.WRITE_SETTINGS', 'android.permission.VIBRATE', 'android.permission.WRITE_EXTERNAL_STORAGE',
+      ...(release ? ['android.permission.INTERNET', 'android.permission.SYSTEM_ALERT_WINDOW'] : []),
+    ],
     intentFilters: [{
       action: 'VIEW',
       autoVerify: true,
@@ -43,7 +48,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   plugins: [
     'expo-router',
     ['expo-camera', { cameraPermission: 'ResQR films QR codes on another screen to receive files.', microphonePermission: false, recordAudioAndroid: false, barcodeScannerEnabled: true }],
-    ['expo-image-picker', { photosPermission: 'ResQR sends photos you choose as QR codes.', cameraPermission: false, microphonePermission: false }],
+    // No cameraPermission: false here, which would remove the camera permission for the whole app.
+    ['expo-image-picker', { photosPermission: 'ResQR sends photos you choose as QR codes.', microphonePermission: false }],
     'expo-secure-store',
     'expo-sharing',
   ],

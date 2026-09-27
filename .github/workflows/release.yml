@@ -1,0 +1,80 @@
+name: Release
+
+# Builds the app with the keys of this repository fixed in it:
+#   TRUSTED_KEYS  repository variable: root public keys
+#   APP_KEYS      secret of the `signing` environment: sealing keys, current first
+#
+# `apk` builds an Android APK here, signed with the development key, for testing and sideloading:
+#   gh workflow run release.yml -f target=apk     then   gh run download <run-id>
+# `stores` starts EAS builds for Google Play and the App Store; EAS holds the store signing keys.
+# It needs EXPO_TOKEN (a secret of the `signing` environment), and TRUSTED_KEYS and APP_KEYS set
+# as EAS environment variables for the production profile, since EAS builds in its own cloud.
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'apk (Android test build here) or stores (EAS production builds)'
+        type: choice
+        options: [apk, stores]
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    if: inputs.target == 'apk'
+    runs-on: ubuntu-latest
+    environment: signing
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - run: npm ci
+      - run: npx expo prebuild --platform android --no-install
+        working-directory: app
+        env:
+          RESQR_RELEASE: '1'
+          TRUSTED_KEYS: ${{ vars.TRUSTED_KEYS }}
+          APP_KEYS: ${{ secrets.APP_KEYS }}
+      - run: ./gradlew assembleRelease --no-daemon
+        working-directory: app/android
+        env:
+          RESQR_RELEASE: '1'
+          TRUSTED_KEYS: ${{ vars.TRUSTED_KEYS }}
+          APP_KEYS: ${{ secrets.APP_KEYS }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: resqr-apk
+          path: app/android/app/build/outputs/apk/release/*.apk
+          retention-days: 30
+
+  stores:
+    if: inputs.target == 'stores'
+    runs-on: ubuntu-latest
+    environment: signing
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx eas-cli@latest build --platform all --profile production --non-interactive --no-wait
+        working-directory: app
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          RESQR_RELEASE: '1'
+          TRUSTED_KEYS: ${{ vars.TRUSTED_KEYS }}
+          APP_KEYS: ${{ secrets.APP_KEYS }}

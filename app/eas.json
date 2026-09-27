@@ -1,0 +1,13 @@
+{
+  "cli": { "appVersionSource": "remote" },
+  "build": {
+    "preview": {
+      "distribution": "internal",
+      "android": { "buildType": "apk" }
+    },
+    "production": {
+      "env": { "RESQR_RELEASE": "1" },
+      "autoIncrement": true
+    }
+  }
+}

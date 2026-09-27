@@ -11,7 +11,7 @@
     "codegen": "nitrogen --logLevel=warning"
   },
   "peerDependencies": {
-    "react-native": "*",
+    "react-native": "^0.86.3",
     "react-native-nitro-modules": "*"
   },
   "devDependencies": {

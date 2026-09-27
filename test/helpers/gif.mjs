@@ -1,8 +1,8 @@
-// Test helpers: a small GIF89a parser with its own LZW decoder (independent of tools/gif.mjs),
+// Test helpers: a small GIF89a parser with its own LZW decoder (independent of protocol/gif.js),
 // and jsQR loaded from the vendored UMD file (which cannot be import()ed as an ES module).
 import { readFileSync } from 'node:fs';
 
-export const jsQR = new Function('self', readFileSync(new URL('../../vendor/jsQR.js', import.meta.url), 'utf8') + '\nreturn self.jsQR;')({});
+export const jsQR = new Function('self', readFileSync(new URL('../vendor/jsQR.js', import.meta.url), 'utf8') + '\nreturn self.jsQR;')({});
 
 function lzwDecode(bytes, min) {
   const clear = 1 << min, eoi = clear + 1, out = [];

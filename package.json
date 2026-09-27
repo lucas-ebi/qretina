@@ -1,12 +1,16 @@
 {
-  "name": "qr-bootstrap",
+  "name": "resqr",
   "license": "MIT",
   "repository": "github:lucas-ebi/qr-bootstrap",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "protocol"
+  ],
   "scripts": {
-    "test": "node --test test/*.test.mjs",
-    "build": "node tools/build.mjs dist",
-    "serve": "npx serve -l 8080"
+    "test": "node --test test/*.test.mjs"
+  },
+  "devDependencies": {
+    "yaml": "^2.9.1"
   }
 }

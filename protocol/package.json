@@ -1,0 +1,18 @@
+{
+  "name": "@resqr/protocol",
+  "version": "0.1.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./fountain.js": "./fountain.js",
+    "./containers.js": "./containers.js",
+    "./gif.js": "./gif.js",
+    "./vendor/qrcode.mjs": "./vendor/qrcode.mjs"
+  },
+  "dependencies": {
+    "@noble/curves": "^2.4.0",
+    "@noble/hashes": "^2.4.0",
+    "fflate": "^0.8.3"
+  }
+}

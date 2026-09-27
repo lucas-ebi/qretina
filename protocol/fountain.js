@@ -1,10 +1,11 @@
-// Protocol core (docs/PROTOCOL.md): dense GF(2) fountain code, base45 framing, containers.
-// Pure ES module without DOM access, shared by the loader, the worker, the tools and the tests.
+// Transfer layer (spec/resqr.yaml): base45 frames and a dense GF(2) fountain code. A Receiver turns
+// scanned strings back into containers; what a container holds is containers.js's business.
+// Pure JS with no platform APIs, so it runs unchanged in Node, Hermes and browsers.
+import { sha256 } from '@noble/hashes/sha2.js';
 
-// First 32 bits of SHA-256 over the parameter block of docs/PROTOCOL.md (checked by the tests).
-export const PROTOCOL = 'CB79D2AC';
+// "RQR" + the first 6 hex digits of SHA-256 over spec/resqr.yaml `parameters` (checked by the tests).
+export const PROTOCOL = 'RQRF6943C';
 export const MAX_N = 4096, MAX_LEN = 1 << 22, MAX_B = 2900;
-export const CODE = 1, FILE = 2, FILE_STORED = 3; // container tags
 
 // ---- PRNG and coefficient masks --------------------------------------------
 
@@ -59,10 +60,6 @@ export function b45decode(s) {
   return out;
 }
 
-export function b64url(s) {
-  return Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
-}
-
 // ---- Frames: <protocol>/<stream id>/<n>/<len>/<seed>/<base45 symbol> ---------
 
 const FRAME = new RegExp(`^${PROTOCOL}/([0-9A-F]{16})/(\\d{1,4})/(\\d{1,7})/(\\d{1,10})/([0-9A-Z $%*+./:-]+)$`);
@@ -82,18 +79,17 @@ export const frame = (id, n, len, seed, data) => `${PROTOCOL}/${id}/${n}/${len}/
 // Symbols are XORs of 32-bit words; blocks are padded to a multiple of 4 bytes internally.
 const words = (bytes, w) => { const u = new Uint8Array(w * 4); u.set(bytes); return new Uint32Array(u.buffer); };
 
-export async function streamId(container) {
-  const h = new Uint8Array(await crypto.subtle.digest('SHA-256', container));
-  return [...h.subarray(0, 8)].map(x => x.toString(16).padStart(2, '0')).join('').toUpperCase();
-}
+export const hex = bytes => Array.from(bytes, x => x.toString(16).padStart(2, '0')).join('').toUpperCase();
+
+export const streamId = container => hex(sha256(container).subarray(0, 8));
 
 // Splits a container into n blocks of about `block` bytes; frame(seed) returns symbol `seed`.
-export async function encoder(container, block = 1200) {
+export function encoder(container, block = 700) {
   const len = container.length, n = Math.ceil(len / block), b = Math.ceil(len / n), w = (b + 3) >>> 2;
   if (len < 2 || len > MAX_LEN || n > MAX_N || b > MAX_B) {
     throw new Error(`container is ${len} B (${n} blocks of ${b} B); limits are ${MAX_LEN} B, ${MAX_N} blocks, ${MAX_B} B/block`);
   }
-  const data = new Uint32Array(n * w), id = await streamId(container);
+  const data = new Uint32Array(n * w), id = streamId(container);
   for (let j = 0; j < n; j++) data.set(words(container.subarray(j * b, (j + 1) * b), w), j * w);
   return {
     id, n, b, len,
@@ -107,6 +103,9 @@ export async function encoder(container, block = 1200) {
     },
   };
 }
+
+// The smallest block size near `preferred` that keeps a container of `len` bytes within MAX_N blocks.
+export const blockFor = (len, preferred = 700) => Math.max(preferred, Math.ceil(len / MAX_N));
 
 // ---- Decoder: incremental Gaussian elimination over GF(2) --------------------
 
@@ -153,72 +152,18 @@ export class Decoder {
   }
 }
 
-// ---- Containers -----------------------------------------------------------
-// CODE: 0x01 || Ed25519 sig (64 B) || deflate-raw("<type> <id> <version>\n" payload), signed over
-//       DOMAIN || the deflated part.   FILE: 0x02 || deflate-raw(meta) and FILE_STORED: 0x03 || meta,
-//       where meta = "<mime> <percent-encoded name>\n" bytes. Files are data; they are never run.
-
-export const DOMAIN = new TextEncoder().encode('qr-bootstrap code\0');
-
-export const concat = (...parts) => {
-  const out = new Uint8Array(parts.reduce((s, p) => s + p.length, 0));
-  parts.reduce((o, p) => (out.set(p, o), o + p.length), 0);
-  return out;
-};
-
-const pipe = async (bytes, t) => new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(t)).arrayBuffer());
-export const deflate = bytes => pipe(bytes, new CompressionStream('deflate-raw'));
-export const inflate = bytes => pipe(bytes, new DecompressionStream('deflate-raw'));
-
-const line = raw => {
-  const nl = raw.indexOf(10);
-  if (nl < 0) throw new Error('malformed container');
-  return [new TextDecoder().decode(raw.subarray(0, nl)).split(' '), raw.subarray(nl + 1)];
-};
-
-// A trusted key plus a short fingerprint (its first 8 base64url characters) to show people.
-export async function loadKey(b64) {
-  return { fp: b64.slice(0, 8), key: await crypto.subtle.importKey('raw', b64url(b64), 'Ed25519', false, ['verify']) };
-}
-
-// Verifies a CODE container against any trusted key, then decompresses. Throws on failure.
-export async function open(container, keys) {
-  if (container[0] !== CODE) throw new Error('not a code container');
-  const sig = container.subarray(1, 65), body = container.subarray(65);
-  let signer;
-  for (const k of keys) if (await crypto.subtle.verify('Ed25519', k.key, sig, concat(DOMAIN, body))) { signer = k.fp; break; }
-  if (!signer) throw new Error(keys.length ? 'bad signature' : 'no trusted key');
-  const [[type, id, v], payload] = line(await inflate(body));
-  if (!type || !id || !/^\d{1,15}$/.test(v)) throw new Error('malformed container');
-  return { type, id, version: +v, payload, signer };
-}
-
-export async function packFile(name, mime, bytes) {
-  if (!/^[\w.+-]+\/[\w.+-]+$/.test(mime)) mime = 'application/octet-stream';
-  const meta = concat(new TextEncoder().encode(`${mime} ${encodeURIComponent(name)}\n`), bytes), z = await deflate(meta);
-  return z.length < meta.length ? concat([FILE], z) : concat([FILE_STORED], meta);
-}
-
-export async function openFile(container) {
-  const tag = container[0];
-  if (tag !== FILE && tag !== FILE_STORED) throw new Error('not a file container');
-  const [[mime, name], bytes] = line(tag === FILE ? await inflate(container.subarray(1)) : container.subarray(1));
-  return { mime, name: decodeURIComponent(name || 'file'), bytes };
-}
-
-// ---- Receiver: interleaved streams, each completed and opened exactly once ------
+// ---- Receiver: interleaved streams, each completed exactly once -------------
 
 export class Receiver {
-  // keys: [{ fp, key }] from loadKey. accept(opened) may throw to refuse verified code.
-  constructor(keys, { accept, maxStreams = 8 } = {}) {
-    Object.assign(this, { keys, accept, maxStreams, streams: new Map(), closed: new Map() });
+  constructor({ maxStreams = 8 } = {}) {
+    Object.assign(this, { maxStreams, streams: new Map(), closed: new Map() });
   }
 
   hold(id, ms) { this.closed.set(id, Date.now() + ms); }
 
-  // Feeds one scanned string. Returns null (ignored), { id, rank, n } (progress), or with
-  // `container` and `opened` (code) or `file`, or with `error`.
-  async push(raw) {
+  // Feeds one scanned string. Returns null (not a frame, or ignored), { id, n, len, rank }
+  // (progress), the same with `container` once complete, or with `error` if the result is corrupt.
+  push(raw) {
     const f = parseFrame(raw);
     if (!f || Date.now() < (this.closed.get(f.id) ?? 0)) return null;
     let d = this.streams.get(f.id);
@@ -229,18 +174,13 @@ export class Receiver {
     const progress = { id: f.id, n: d.n, len: d.len };
     if (!d.add(f.seed, f.data)) return { ...progress, rank: d.rank };
 
-    this.streams.delete(f.id); // closed synchronously, so concurrent pushes cannot re-open it
-    this.closed.set(f.id, Infinity);
-    try {
-      const container = d.solve();
-      if (await streamId(container) !== f.id) throw new Error('corrupt stream');
-      if (container[0] !== CODE) return { ...progress, rank: d.n, container, file: await openFile(container) };
-      const opened = await open(container, this.keys);
-      await this.accept?.(opened);
-      return { ...progress, rank: d.n, container, opened };
-    } catch (e) {
+    this.streams.delete(f.id);
+    const container = d.solve();
+    if (streamId(container) !== f.id) {
       this.closed.set(f.id, Date.now() + 5000);
-      return { ...progress, rank: d.n, error: e.message };
+      return { ...progress, rank: d.n, error: 'corrupt stream' };
     }
+    this.closed.set(f.id, Infinity);
+    return { ...progress, rank: d.n, container };
   }
 }

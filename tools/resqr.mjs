@@ -6,9 +6,10 @@
 //   node tools/resqr.mjs file <file> [--name N] [--mime M] [output]
 //   node tools/resqr.mjs cert --pub <public key> --name <publisher> --ns <id prefix> [--days 365] [--serial N] [key] --out pub.cert
 //   node tools/resqr.mjs crl --number N [--revoke serial,serial...] [key] [output]
+//   node tools/resqr.mjs key [--passphrase P] [--label L] --out group.resqrkey
 //
 //   key:    [--key signing-key.json]
-//   output: [--out container.bin] [--block 700] [--frames N]
+//   output: [--private group.resqrkey] [--out container.bin] [--block 700] [--frames N]
 //           [--gif out.gif [--scale 8] [--fps 10] [--ecc L] [--intro 3] [--link HTTPS://RESQR.APP/SCAN]]
 //
 // `keygen -` prints the private key to stdout (to pipe into `gh secret set`) and the public key to
@@ -17,11 +18,15 @@
 // takes a root key, or a publisher key with --cert. --out writes the container itself; otherwise
 // frames are printed one per line, or with --gif written as a GIF that loops forever, each loop
 // starting with --intro seconds (0 to 9) of countdown QR codes of --link, which open the app.
+//
+// Output is sealed with the app key from RESQR_APP_KEY (base64url, 32 bytes), as the app seals
+// everything it sends; --private first seals it with a group key made by `key`, which receivers
+// must already hold.
 import { readFile, writeFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { ed25519 } from '@noble/curves/ed25519.js';
-import { b64url, issueCert, issueCrl, packFile, signCode, toB64url } from '../protocol/containers.js';
+import { b64url, issueCert, issueCrl, keyFromPassphrase, keyId, packFile, seal, signCode, toB64url } from '../protocol/containers.js';
 import { blockFor, encoder } from '../protocol/fountain.js';
 import { encodeGif, renderFrames, renderIntro } from '../protocol/gif.js';
 
@@ -43,6 +48,25 @@ export function keygen() {
 }
 
 export const sign = (jwk, opts) => signCode(b64url(jwk.d), opts);
+
+// Key files hold a sealing key shared in advance: { "label": "...", "key": "<base64url>" }.
+export function keyFile({ passphrase, label }) {
+  const key = passphrase ? keyFromPassphrase(passphrase) : crypto.getRandomValues(new Uint8Array(32));
+  return { label: label ?? `key ${keyId(key).slice(0, 4)}`, key: toB64url(key) };
+}
+
+async function readSealKey(file) {
+  const key = b64url(JSON.parse(await readFile(file, 'utf8')).key);
+  if (key.length !== 32) throw new Error(`${file}: a sealing key is 32 bytes`);
+  return key;
+}
+
+function appKey() {
+  if (!process.env.RESQR_APP_KEY) return null;
+  const key = b64url(process.env.RESQR_APP_KEY);
+  if (key.length !== 32) throw new Error('RESQR_APP_KEY must be 32 bytes, base64url');
+  return key;
+}
 
 async function readKey(opt) {
   const fromEnv = !opt.key && process.env.RESQR_SIGNING_KEY;
@@ -66,6 +90,10 @@ export function makeGif(frames, { link = LINK, intro = 3, scale = 8, fps = 10, e
 }
 
 async function output(container, opt) {
+  const app = appKey();
+  if (opt.private) container = seal(await readSealKey(opt.private), container);
+  if (app) container = seal(app, container);
+  else console.error('warning: not sealed with the app key (RESQR_APP_KEY is not set)');
   if (opt.intro !== undefined && !/^[0-9]$/.test(opt.intro)) throw new Error('--intro must be a whole number of seconds from 0 to 9');
   if (opt.link !== undefined && !/^[a-z][a-z0-9+.-]*:\S+$/i.test(opt.link)) throw new Error('--link must be a URL');
   if (opt.out) {
@@ -107,6 +135,10 @@ async function main([cmd, ...argv]) {
     const cert = issueCert(b64url((await readKey(opt)).d), { publicKey: opt.pub, name: opt.name, namespace: opt.ns, notBefore: now, notAfter: now + Math.round(days * 86400), serial });
     await writeFile(opt.out, cert);
     console.error(`${opt.out}: ${opt.name} may publish ids beginning with ${opt.ns} for ${days} days`);
+  } else if (cmd === 'key' && opt.out) {
+    const k = keyFile({ passphrase: opt.passphrase, label: opt.label });
+    await writeFile(opt.out, JSON.stringify(k), { mode: 0o600 });
+    console.error(`${opt.out}: "${k.label}", key id ${keyId(b64url(k.key))}`);
   } else if (cmd === 'crl' && opt.number) {
     const serials = opt.revoke ? opt.revoke.split(',').map(Number) : [];
     await output(issueCrl(b64url((await readKey(opt)).d), { number: +opt.number, serials }), opt);
@@ -119,8 +151,9 @@ async function main([cmd, ...argv]) {
       '       resqr.mjs file <file> [--name N] [--mime M] [output]\n' +
       '       resqr.mjs cert --pub <public key> --name <publisher> --ns <id prefix> [--days 365] [--serial N] [key] --out pub.cert\n' +
       '       resqr.mjs crl --number N [--revoke serial,serial...] [key] [output]\n' +
+      '       resqr.mjs key [--passphrase P] [--label L] --out group.resqrkey\n' +
       'key:    [--key signing-key.json]\n' +
-      'output: [--out file] [--block B] [--frames N] [--gif out.gif [--scale S] [--fps F] [--ecc L|M|Q|H] [--intro 0-9] [--link URL]]');
+      'output: [--private group.resqrkey] [--out file] [--block B] [--frames N] [--gif out.gif [--scale S] [--fps F] [--ecc L|M|Q|H] [--intro 0-9] [--link URL]]');
     process.exit(1);
   }
 }

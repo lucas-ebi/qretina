@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { PROTOCOL } from '../protocol/fountain.js';
-import { loadKey } from '../protocol/containers.js';
+import { b64url, keyFromPassphrase, keyId, loadKey, toB64url } from '../protocol/containers.js';
 import { LINK, makeFrames } from '../tools/resqr.mjs';
 import { parseGif, readQr } from './helpers/gif.mjs';
 import { receive } from './helpers/stream.mjs';
@@ -97,4 +97,28 @@ test('publisher flow: a root certifies a publisher, whose programs open until re
   await assert.rejects(node(['sign', snake, '--id', 'org.other.snake', '--cert', cert, '--key', pubKey, '--out', join(dir, 'x.bin')]).then(async () => {
     throw new Error(receive(makeFramesOf(await readFile(join(dir, 'x.bin'))), { roots }).error);
   }), /may not publish/);
+});
+
+test('with RESQR_APP_KEY, output is sealed; --private adds a group layer only key holders open', async () => {
+  const dir = await tmp(), group = join(dir, 'g.resqrkey'), app = crypto.getRandomValues(new Uint8Array(32));
+  await node(['key', '--label', 'Shelter 4', '--out', group]);
+  const env = { RESQR_APP_KEY: toB64url(app) }, groupKey = b64url(JSON.parse(await readFile(group, 'utf8')).key);
+  const notes = join(dir, 'n.txt');
+  await writeFile(notes, 'roll call at 8');
+  const plain = (await node(['file', notes], env)).stdout.trim().split('\n');
+  assert.equal(receive(plain, { keys: [app] }).file.name, 'n.txt');
+  assert.ok(receive(plain, {}).locked, 'without the app key, only a key id');
+  const priv = (await node(['file', notes, '--private', group], env)).stdout.trim().split('\n');
+  assert.equal(receive(priv, { keys: [app, groupKey] }).file.name, 'n.txt');
+  assert.equal(receive(priv, { keys: [app] }).locked, keyId(groupKey));
+  const { stderr } = await node(['file', notes]);
+  assert.match(stderr, /not sealed with the app key/);
+});
+
+test('key --passphrase gives the same key on every machine', async () => {
+  const dir = await tmp();
+  for (const f of ['a', 'b']) await node(['key', '--passphrase', 'river bend', '--out', join(dir, f)]);
+  const [a, b] = await Promise.all(['a', 'b'].map(async f => JSON.parse(await readFile(join(dir, f), 'utf8')).key));
+  assert.equal(a, b);
+  assert.equal(a, toB64url(keyFromPassphrase('river bend')));
 });

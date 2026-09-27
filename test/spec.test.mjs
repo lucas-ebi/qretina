@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MAX_B, MAX_LEN, MAX_N, PROTOCOL, Receiver, b45encode, encoder, hex, mask, streamId } from '../protocol/fountain.js';
-import { CODE, DOMAIN, FILE, FILE_STORED, TYPES } from '../protocol/containers.js';
+import { CERT, CERT_DOMAIN, CODE, CRL, CRL_DOMAIN, DOMAIN, FILE, FILE_STORED, SEALED, TYPES, keyFromPassphrase, keyId, openContainer, seal } from '../protocol/containers.js';
 import { canonical, protocolId, spec } from './helpers/spec.mjs';
 import { enc } from './helpers/stream.mjs';
 
@@ -22,9 +22,9 @@ test('the identifier covers every parameter but nothing else', () => {
 test('the code implements the limits, tags, types and signature domain of the spec', () => {
   assert.deepEqual([MAX_N, MAX_LEN, MAX_B], [p.frame.limits['max-n'], p.frame.limits['max-len'], p.frame.limits['max-block']]);
   const tags = Object.fromEntries(p.containers.tags.map(t => [t.name, t]));
-  assert.deepEqual([tags.code.tag, tags.file.tag, tags['file-stored'].tag], [CODE, FILE, FILE_STORED]);
+  assert.deepEqual([tags.code, tags.file, tags['file-stored'], tags.certificate, tags['revocation-list'], tags.sealed].map(t => t.tag), [CODE, FILE, FILE_STORED, CERT, CRL, SEALED]);
   assert.deepEqual(tags.code.type, TYPES);
-  assert.deepEqual(DOMAIN, enc(tags.code.domain));
+  assert.deepEqual([DOMAIN, CERT_DOMAIN, CRL_DOMAIN], [tags.code, tags.certificate, tags['revocation-list']].map(t => enc(t.domain)));
 });
 
 test('vectors: mask and base45', () => {
@@ -40,4 +40,13 @@ test('vectors: a whole stream, frame by frame', () => {
   let r;
   for (let s = 1; !(r = rx.push(e.frame(s)))?.container; s++);
   assert.equal(hex(r.container), v.stream.container);
+});
+
+test('vectors: a sealed container and a passphrase key', () => {
+  const key = unhex(v.sealed.key), inner = unhex(v.stream.container);
+  assert.equal(keyId(key), v.sealed['key-id']);
+  assert.equal(hex(seal(key, inner)), v.sealed.container);
+  const r = openContainer(unhex(v.sealed.container), { keys: [key] });
+  assert.deepEqual([r.file.name, r.sealed], ['hello.txt', [v.sealed['key-id']]]);
+  assert.equal(hex(keyFromPassphrase(v['passphrase-key'].passphrase)), v['passphrase-key'].key);
 });

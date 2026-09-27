@@ -4,7 +4,7 @@
 import { sha256 } from '@noble/hashes/sha2.js';
 
 // "RQR" + the first 6 hex digits of SHA-256 over spec/resqr.yaml `parameters` (checked by the tests).
-export const PROTOCOL = 'RQR64B3DF';
+export const PROTOCOL = 'RQR6EAC80';
 export const MAX_N = 4096, MAX_LEN = 1 << 22, MAX_B = 2900;
 
 // ---- PRNG and coefficient masks --------------------------------------------

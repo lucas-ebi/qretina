@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ed25519 } from '@noble/curves/ed25519.js';
-import { CODE, DOMAIN, b64url, concat, deflate, issueCert, issueCrl, loadKey, openCert, openCode, openContainer, openFile, packFile, signCode, toB64url } from '../protocol/containers.js';
-import { keygen, sign } from '../tools/resqr.mjs';
-import { dec, enc, send } from './helpers/stream.mjs';
+import { CODE, DOMAIN, b64url, concat, deflate, issueCert, issueCrl, keyFromPassphrase, keyId, loadKey, openCert, openCode, openContainer, openFile, packFile, seal, signCode, toB64url } from '../protocol/containers.js';
+import { keygen, makeFrames, sign } from '../tools/resqr.mjs';
+import { dec, enc, receive, send } from './helpers/stream.mjs';
 
 const html = '<!doctype html><title>demo</title>' + '<p>hello</p>'.repeat(200);
 
@@ -162,4 +162,57 @@ test('revocation lists are signed by a root and carry a number and serials', () 
   assert.deepEqual(openContainer(issueCrl(sk, { number: 1 }), { roots }).crl, { number: 1, serials: [] });
   assert.match(send(issueCrl(b64url(keygen().jwk.d), { number: 9 }), { roots }).error, /bad signature/);
   assert.throws(() => issueCrl(sk, { number: 1, serials: ['x'] }), /malformed/);
+});
+
+// ---- Sealed containers ---------------------------------------------------------------
+
+const randomKey = () => crypto.getRandomValues(new Uint8Array(32));
+
+test('a sealed file opens with its key, and the stream shows none of its content', () => {
+  const app = randomKey(), bytes = enc('meet at the stadium at 6'.repeat(20)), file = packFile('plan.txt', 'text/plain', bytes);
+  const sealed = seal(app, file), r = send(sealed, { keys: [randomKey(), app] });
+  assert.deepEqual([r.file.name, r.file.bytes, r.sealed], ['plan.txt', bytes, [keyId(app)]]);
+  const { frames } = makeFrames(sealed, { count: 20 });
+  assert.ok(!frames.join('').includes('PLAN'), 'no plain name in the frames');
+  assert.ok(!dec(sealed).includes('plan.txt') && !dec(sealed).includes('stadium'));
+});
+
+test('sealing is deterministic, so relays of one item form one stream', () => {
+  const k = randomKey(), c = packFile('a.bin', 'application/octet-stream', crypto.getRandomValues(new Uint8Array(500)));
+  assert.deepEqual(seal(k, c), seal(k, c));
+  assert.notDeepEqual(seal(k, c), seal(randomKey(), c));
+  const [a, b] = [makeFrames(seal(k, c), { start: 1, count: 30 }).frames, makeFrames(seal(k, c), { start: 1000, count: 30 }).frames];
+  const mixed = a.slice(0, 3).flatMap((f, i) => [f, b[i]]).concat(b.slice(3));
+  assert.deepEqual(send(seal(k, c), { keys: [k] }).file.bytes, receive(mixed, { keys: [k] }).file.bytes);
+});
+
+test('without the key a sealed container is locked, not an error; with it, it opens later', () => {
+  const k = randomKey(), sealed = seal(k, packFile('x.txt', 'text/plain', enc('hi')));
+  const r = send(sealed, { keys: [randomKey()] });
+  assert.deepEqual([r.locked, r.file, r.error], [keyId(k), undefined, undefined]);
+  assert.equal(openContainer(r.container, { keys: [k] }).file.name, 'x.txt');
+});
+
+test('private inside app: two layers, opened in order; a third is refused', () => {
+  const app = randomKey(), group = randomKey(), { roots, container } = setup();
+  const twice = seal(app, seal(group, container));
+  const r = send(twice, { keys: [app, group], roots });
+  assert.deepEqual([r.code.id, r.sealed], ['demo', [keyId(app), keyId(group)]]);
+  assert.deepEqual(send(twice, { keys: [app], roots }).locked, keyId(group), 'outsiders to the group see only its key id');
+  assert.throws(() => openContainer(seal(app, seal(app, seal(app, container))), { keys: [app], roots }), /too many sealed layers/);
+});
+
+test('tampered sealed containers fail authentication', () => {
+  const k = randomKey(), sealed = seal(k, packFile('x.txt', 'text/plain', enc('hi')));
+  for (const i of [5, 20, sealed.length - 1]) {
+    const bad = sealed.slice();
+    bad[i] ^= 1;
+    if (i < 9) assert.ok(openContainer(bad, { keys: [k] }).locked, 'a changed key id matches no key');
+    else assert.throws(() => openContainer(bad, { keys: [k] }), /does not authenticate/);
+  }
+});
+
+test('passphrase keys are stable, normalised, and differ between passphrases', () => {
+  assert.deepEqual(keyFromPassphrase('café'), keyFromPassphrase('café'));
+  assert.notDeepEqual(keyFromPassphrase('a'), keyFromPassphrase('b'));
 });

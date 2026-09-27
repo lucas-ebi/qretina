@@ -89,6 +89,15 @@ parameters:
         serials: serial *(SP serial), or empty
         signature: Ed25519 over domain || everything after the signature, by a root key
         domain: "resqr crl\0"
+      - tag: 6
+        name: sealed
+        layout: key-id(8) || nonce(24) || XChaCha20-Poly1305(enc-key, nonce, inner, ad = 0x06 || key-id)
+        inner: a whole container of any type; at most two sealed layers
+        key: 32 bytes, held in advance by sender and receiver
+        key-id: the first 8 bytes of SHA-256("resqr key\0" || key)
+        enc-key: HMAC-SHA-256(key, "resqr enc")
+        nonce: the first 24 bytes of HMAC-SHA-256(HMAC-SHA-256(key, "resqr iv"), inner)
+    passphrase-key: scrypt(UTF-8 passphrase, salt "resqr psk", N 32768, r 8, p 1, 32 bytes)
 
 vectors:
   mask:
@@ -104,6 +113,13 @@ vectors:
     block: 8
     stream-id: "A124DF0DA9C7784A"
     frames: # seeds 1, 2, 3
-      - "RQR64B3DF/A124DF0DA9C7784A/5/34/1/+EJF2H02ED2"
-      - "RQR64B3DF/A124DF0DA9C7784A/5/34/2/U8A0H9/U721"
-      - "RQR64B3DF/A124DF0DA9C7784A/5/34/3/IPJG9QH39R1"
+      - "RQR6EAC80/A124DF0DA9C7784A/5/34/1/+EJF2H02ED2"
+      - "RQR6EAC80/A124DF0DA9C7784A/5/34/2/U8A0H9/U721"
+      - "RQR6EAC80/A124DF0DA9C7784A/5/34/3/IPJG9QH39R1"
+  sealed: # the stream container above, sealed under the key 0x42 repeated 32 times
+    key: "4242424242424242424242424242424242424242424242424242424242424242"
+    key-id: "29F30EB5FB6B7416"
+    container: "0629F30EB5FB6B7416769E429CDB30AFFCB5E3CD164FD4C79DAB9FEB864B2086EE5894D975272216A18C2C47FE4814FF75BDCE94D2A09BDD675752772DA8AD71FF303A791E09701180355AC244A6C1B21C13C7"
+  passphrase-key:
+    passphrase: "correct horse battery staple"
+    key: "807BBC8E0E0D6D5F176F15C943BB18BD37FCFF74FE45AE0B87AA4423A989D039"

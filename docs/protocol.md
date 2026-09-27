@@ -8,7 +8,7 @@ This page explains them. The key words MUST, MUST NOT, SHOULD and MAY are used a
 The protocol identifier is `RQR` followed by the first six hexadecimal digits, in upper case, of
 SHA-256 over the canonical JSON (RFC 8785) of `parameters`. Any change to the parameters gives a new
 identifier, and a receiver ignores frames that carry another one instead of misreading them. The
-current identifier is `RQR64B3DF`.
+current identifier is `RQR6EAC80`.
 
 ## Overview
 
@@ -79,6 +79,21 @@ like any other container, and releases of the app include the latest one.
 **File (tags 2 and 3).** Arbitrary data with a media type and a name, compressed when that makes it
 smaller. Files carry no signature and MUST NOT be run or rendered as active content, whatever their
 media type. A receiver MAY preview image, audio and video types.
+
+**Sealed (tag 6).** Any container encrypted with XChaCha20-Poly1305 under a 32-byte key that sender
+and receiver hold in advance. The container names the key only by an 8-byte key id. The nonce is
+derived from the content, so sealing the same container under the same key always gives the same
+bytes, and therefore the same stream: two senders relaying one sealed item still add up, and a
+receiver can combine frames from both. The cost is that an observer can tell whether two sealed
+containers are equal. A receiver that holds no matching key keeps the container *locked*: it can
+still relay it, and opens it once it obtains the key. At most two layers are allowed.
+
+The app uses two layers. Everything it sends is sealed with an *app key* built into the app, so
+that frames mean nothing to other QR readers. This is not confidentiality: anyone can extract the
+app key from the app. For confidentiality, the sender first seals the container with a *group key*
+that the receivers already hold, made at random or derived from a passphrase with scrypt. The
+passphrase must be strong, since a recording of the stream allows offline guessing. Sealing hides
+content and names but not the size or the timing of a transfer, and there is no forward secrecy.
 
 ## Countdown
 

@@ -65,6 +65,7 @@ jobs:
           fi
         env:
           RESQR_SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          RESQR_APP_KEY: ${{ secrets.APP_KEY }}
           ACTION: ${{ inputs.action }}
           PUB: ${{ inputs.pub }}
           NAME: ${{ inputs.name }}

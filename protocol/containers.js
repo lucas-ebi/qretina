@@ -1,10 +1,14 @@
-// Containers (spec/resqr.yaml `containers`): signed code, files, certificates and revocation lists.
-// Pure JS. Code runs only when signed by a root key, or by a publisher whose certificate a root
-// key issued; files are data and are never run, whatever their type.
+// Containers (spec/resqr.yaml `containers`): signed code, files, certificates, revocation lists and
+// sealed (encrypted) containers. Pure JS. Code runs only when signed by a root key, or by a
+// publisher whose certificate a root key issued; files are data and are never run, whatever their type.
+import { xchacha20poly1305 } from '@noble/ciphers/chacha.js';
 import { ed25519 } from '@noble/curves/ed25519.js';
+import { hmac } from '@noble/hashes/hmac.js';
+import { scrypt } from '@noble/hashes/scrypt.js';
+import { sha256 } from '@noble/hashes/sha2.js';
 import { deflateSync, inflateSync, strFromU8, strToU8 } from 'fflate';
 
-export const CODE = 1, FILE = 2, FILE_STORED = 3, CERT = 4, CRL = 5;
+export const CODE = 1, FILE = 2, FILE_STORED = 3, CERT = 4, CRL = 5, SEALED = 6;
 export const TYPES = ['html', 'json'];
 export const DOMAIN = strToU8('resqr code\0'), CERT_DOMAIN = strToU8('resqr cert\0'), CRL_DOMAIN = strToU8('resqr crl\0');
 const ID = /^[A-Za-z0-9_.-]{1,64}$/;
@@ -42,6 +46,8 @@ export function toB64url(bytes) {
   }
   return bits ? s + B64[(acc << (6 - bits)) & 63] : s;
 }
+
+const hex = bytes => Array.from(bytes, x => x.toString(16).padStart(2, '0')).join('').toUpperCase();
 
 const line = raw => {
   const nl = raw.indexOf(10);
@@ -161,11 +167,45 @@ export function openFile(container) {
   return { mime, name: decodeURIComponent(name || 'file'), bytes };
 }
 
+// ---- Sealed containers ----------------------------------------------------------
+// Encrypted under a 32-byte key that sender and receiver hold in advance. The nonce is derived from
+// the content, so sealing one item under one key always gives the same bytes and the same stream:
+// relays of the same item add up. It reveals only whether two sealed containers are equal.
+
+const KEY_DOMAIN = strToU8('resqr key\0');
+
+export const keyId = key => hex(sha256(concat(KEY_DOMAIN, key)).subarray(0, 8));
+
+export const keyFromPassphrase = passphrase =>
+  scrypt(strToU8(passphrase.normalize('NFC')), strToU8('resqr psk'), { N: 1 << 15, r: 8, p: 1, dkLen: 32 });
+
+export function seal(key, inner) {
+  if (key.length !== 32) throw new Error('a sealing key is 32 bytes');
+  const id = sha256(concat(KEY_DOMAIN, key)).subarray(0, 8), ad = concat([SEALED], id);
+  const nonce = hmac(sha256, hmac(sha256, key, strToU8('resqr iv')), inner).subarray(0, 24);
+  return concat(ad, nonce, xchacha20poly1305(hmac(sha256, key, strToU8('resqr enc')), nonce, ad).encrypt(inner));
+}
+
+// Returns the inner container, or null when none of `keys` matches the container's key id.
+export function unseal(container, keys) {
+  if (container[0] !== SEALED || container.length < 1 + 8 + 24 + 16) throw new Error('malformed container');
+  const id = hex(container.subarray(1, 9)), key = keys.find(k => keyId(k) === id);
+  if (!key) return null;
+  const ad = container.subarray(0, 9), nonce = container.subarray(9, 33);
+  try {
+    return xchacha20poly1305(hmac(sha256, key, strToU8('resqr enc')), nonce, ad).decrypt(container.subarray(33));
+  } catch {
+    throw new Error('sealed container does not authenticate');
+  }
+}
+
 // ---- Any container ------------------------------------------------------------
 
 // Opens any container. Returns { code } (verified, then accepted by `accept`, which may throw to
-// refuse it), { file }, { cert } or { crl }; throws on anything else. Options as for openCode.
-export function openContainer(container, { accept, ...trust } = {}) {
+// refuse it), { file }, { cert }, { crl }, or { locked } (the key id) for a sealed container none of
+// `keys` opens; throws on anything else. When sealed layers were opened, `sealed` lists their key
+// ids, outermost first. Other options as for openCode.
+export function openContainer(container, { accept, keys = [], depth = 0, ...trust } = {}) {
   switch (container[0]) {
     case FILE: case FILE_STORED: return { file: openFile(container) };
     case CERT: return { cert: openCert(container, trust.roots ?? []) };
@@ -174,6 +214,13 @@ export function openContainer(container, { accept, ...trust } = {}) {
       const code = openCode(container, trust);
       accept?.(code);
       return { code };
+    }
+    case SEALED: {
+      if (depth >= 2) throw new Error('too many sealed layers');
+      const inner = unseal(container, keys), id = hex(container.subarray(1, 9));
+      if (!inner) return { locked: id };
+      const r = openContainer(inner, { accept, keys, depth: depth + 1, ...trust });
+      return { ...r, sealed: [id, ...(r.sealed ?? [])] };
     }
     default: throw new Error('unknown container type');
   }

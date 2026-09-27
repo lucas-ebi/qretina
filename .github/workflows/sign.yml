@@ -9,7 +9,7 @@ name: Sign payload
 # opens ResQR before the data frames begin.
 #
 # The key is an *environment* secret named SIGNING_KEY in the `signing` environment, so it can be
-# limited to `main` and to reviewers.
+# limited to `main` and to reviewers. APP_KEY in the same environment seals the output as the app does.
 
 on:
   workflow_dispatch:
@@ -58,6 +58,7 @@ jobs:
             ${VERSION:+--version "$VERSION"} --intro "$INTRO" --gif "$RUNNER_TEMP/$APP_ID.gif"
         env:
           RESQR_SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          RESQR_APP_KEY: ${{ secrets.APP_KEY }}
           FILE: ${{ inputs.file }}
           APP_ID: ${{ inputs.id }}
           VERSION: ${{ inputs.version }}

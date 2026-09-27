@@ -24,9 +24,9 @@ cd app && npx expo run:android      # or run:ios, on macOS
 
 ## Status
 
-The protocol, command line and C++ core are tested. The app type-checks and bundles for both
-platforms, but has not yet been run on a device. The C++ core is not yet connected to the app,
-which uses the JavaScript implementation.
+The protocol, command line and C++ core are tested in CI. The app runs its transfers on the C++ core;
+an Android release build passes its self-test on an emulator. It has not yet been tried on real
+phones or built for iOS, and files shared into the app from other apps arrive empty.
 
 ## Licence
 

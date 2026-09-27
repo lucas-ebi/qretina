@@ -5,7 +5,7 @@
   "dependencies": {
     "@qretina/native": "*",
     "@qretina/protocol": "*",
-    "@shopify/react-native-skia": "2.6.2",
+    "@shopify/react-native-skia": "2.13.0",
     "expo": "~57.0.25",
     "expo-audio": "~57.0.5",
     "expo-brightness": "~57.0.2",

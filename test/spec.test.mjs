@@ -9,7 +9,7 @@ const { parameters: p, vectors: v } = spec;
 const unhex = s => Uint8Array.from(s.match(/../g), x => parseInt(x, 16));
 
 test('PROTOCOL is derived from the spec parameters', () => {
-  assert.equal(protocolId(), PROTOCOL, 'spec/resqr.yaml parameters changed: set PROTOCOL to the new identifier');
+  assert.equal(protocolId(), PROTOCOL, 'spec/qretina.yaml parameters changed: set PROTOCOL to the new identifier');
 });
 
 test('the identifier covers every parameter but nothing else', () => {

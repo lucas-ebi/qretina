@@ -1,7 +1,7 @@
 // Prepares a container for broadcasting. Everything sent is sealed with the current app key; with a
 // group key, the content is sealed with it first. An item that arrived sealed with a known app key
 // and needs no new group layer is sent exactly as received, so relays of it form one stream.
-import { SEALED, keyId, seal, unseal } from '@resqr/protocol/containers.js';
+import { SEALED, keyId, seal, unseal } from '@qretina/protocol/containers.js';
 
 export function outgoing(container: Uint8Array, appKeys: Uint8Array[], group?: Uint8Array): Uint8Array {
   const [current] = appKeys;

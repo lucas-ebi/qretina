@@ -7,15 +7,15 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { PROTOCOL } from '../protocol/fountain.js';
 import { b64url, keyFromPassphrase, keyId, loadKey, toB64url } from '../protocol/containers.js';
-import { LINK, makeFrames } from '../tools/resqr.mjs';
+import { LINK, makeFrames } from '../tools/qretina.mjs';
 import { parseGif, readQr } from './helpers/gif.mjs';
 import { receive } from './helpers/stream.mjs';
 
 const run = promisify(execFile);
-const cli = new URL('../tools/resqr.mjs', import.meta.url).pathname;
+const cli = new URL('../tools/qretina.mjs', import.meta.url).pathname;
 const snake = new URL('../examples/snake.html', import.meta.url).pathname;
 const node = (args, env = {}, cwd) => run(process.execPath, [cli, ...args], { env: { ...process.env, ...env }, cwd });
-const tmp = () => mkdtemp(join(tmpdir(), 'resqr-cli-'));
+const tmp = () => mkdtemp(join(tmpdir(), 'qretina-cli-'));
 const makeFramesOf = bytes => makeFrames(new Uint8Array(bytes)).frames;
 
 test('keygen - prints the private key to stdout, the public key to stderr, and writes no file', async () => {
@@ -28,16 +28,16 @@ test('keygen - prints the private key to stdout, the public key to stderr, and w
   assert.deepEqual(await readdir(cwd), []);
 });
 
-test('sign uses RESQR_SIGNING_KEY (as in CI), and the frames decode under the public key', async () => {
+test('sign uses QRETINA_SIGNING_KEY (as in CI), and the frames decode under the public key', async () => {
   const { stdout: key } = await node(['keygen', '-']);
-  const { stdout, stderr: log } = await node(['sign', snake, '--id', 'snake', '--version', '7'], { RESQR_SIGNING_KEY: key });
+  const { stdout, stderr: log } = await node(['sign', snake, '--id', 'snake', '--version', '7'], { QRETINA_SIGNING_KEY: key });
   assert.ok(!log.includes(JSON.parse(key).d), 'log never contains the private key');
   const r = receive(stdout.trim().split('\n'), { roots: [loadKey(JSON.parse(key).x)] });
   assert.deepEqual([r?.code?.id, r?.code?.version, r?.code?.type], ['snake', 7, 'html'], JSON.stringify(r));
 });
 
 test('sign with no key anywhere fails instead of signing with something else', async () => {
-  await assert.rejects(node(['sign', snake, '--id', 'snake'], { RESQR_SIGNING_KEY: '' }, await tmp()), /ENOENT|signing-key/);
+  await assert.rejects(node(['sign', snake, '--id', 'snake'], { QRETINA_SIGNING_KEY: '' }, await tmp()), /ENOENT|signing-key/);
 });
 
 test('file packs any file, guessing its type from the name', async () => {
@@ -66,9 +66,9 @@ test('--intro 0 leaves the countdown out, and --link changes it', async () => {
   await node(['file', snake, '--gif', join(dir, 'a.gif'), '--intro', '0']);
   let gif = parseGif(new Uint8Array(await readFile(join(dir, 'a.gif'))));
   assert.ok(readQr(gif.frames[0].pixels, gif.width, gif.height).startsWith(PROTOCOL + '/'));
-  await node(['file', snake, '--gif', join(dir, 'b.gif'), '--intro', '2', '--link', 'resqr://scan']);
+  await node(['file', snake, '--gif', join(dir, 'b.gif'), '--intro', '2', '--link', 'qretina://scan']);
   gif = parseGif(new Uint8Array(await readFile(join(dir, 'b.gif'))));
-  assert.equal(readQr(gif.frames[1].pixels, gif.width, gif.height), 'resqr://scan');
+  assert.equal(readQr(gif.frames[1].pixels, gif.width, gif.height), 'qretina://scan');
 });
 
 test('--gif options are validated before anything is written', async () => {
@@ -99,10 +99,10 @@ test('publisher flow: a root certifies a publisher, whose programs open until re
   }), /may not publish/);
 });
 
-test('with RESQR_APP_KEY, output is sealed; --private adds a group layer only key holders open', async () => {
-  const dir = await tmp(), group = join(dir, 'g.resqrkey'), app = crypto.getRandomValues(new Uint8Array(32));
+test('with QRETINA_APP_KEY, output is sealed; --private adds a group layer only key holders open', async () => {
+  const dir = await tmp(), group = join(dir, 'g.qretinakey'), app = crypto.getRandomValues(new Uint8Array(32));
   await node(['key', '--label', 'Shelter 4', '--out', group]);
-  const env = { RESQR_APP_KEY: toB64url(app) }, groupKey = b64url(JSON.parse(await readFile(group, 'utf8')).key);
+  const env = { QRETINA_APP_KEY: toB64url(app) }, groupKey = b64url(JSON.parse(await readFile(group, 'utf8')).key);
   const notes = join(dir, 'n.txt');
   await writeFile(notes, 'roll call at 8');
   const plain = (await node(['file', notes], env)).stdout.trim().split('\n');

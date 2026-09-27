@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { PROTOCOL } from '../protocol/fountain.js';
 import { loadKey } from '../protocol/containers.js';
 import { encodeGif, renderFrames, renderIntro } from '../protocol/gif.js';
-import { LINK, keygen, makeFrames, sign } from '../tools/resqr.mjs';
+import { LINK, keygen, makeFrames, sign } from '../tools/qretina.mjs';
 import { parseGif, readQr } from './helpers/gif.mjs';
 import { dec, enc, receive } from './helpers/stream.mjs';
 

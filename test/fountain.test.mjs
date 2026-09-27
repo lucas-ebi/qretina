@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { Decoder, MAX_N, PROTOCOL, Receiver, b45decode, b45encode, blockFor, encoder, mask, parseFrame } from '../protocol/fountain.js';
 import { packFile } from '../protocol/containers.js';
-import { makeFrames } from '../tools/resqr.mjs';
+import { makeFrames } from '../tools/qretina.mjs';
 import { enc, receive, shuffle } from './helpers/stream.mjs';
 
 const noise = n => new Uint8Array(randomBytes(n));
@@ -37,8 +37,8 @@ test('hostile frames are rejected quickly and never hang', () => {
     `${ok}/0/100/1/AA`, `${ok}/4097/100000/1/AA`, `${ok}/4/100/1/AA` /* wrong data length */,
     `${ok}/4/99999999/1/AA`, `${ok}/4/100/4294967296/AA`, `${ok}/10/9/1/AA` /* n > len */,
     `${ok}/1/100000/1/AA` /* block > MAX_B */, `${PROTOCOL}/short/4/100/1/AA`, 'garbage', '{"i":"x"}',
-    `RQR000000/0123456789ABCDEF/1/4/1/${'0'.repeat(6)}` /* another protocol revision */,
-    'HTTPS://RESQR.APP/SCAN' /* the countdown link */,
+    `QRT000000/0123456789ABCDEF/1/4/1/${'0'.repeat(6)}` /* another protocol revision */,
+    'HTTPS://QRETINA.APP/SCAN' /* the countdown link */,
   ];
   const t = performance.now();
   for (const c of cases) assert.equal(parseFrame(c), null, c);

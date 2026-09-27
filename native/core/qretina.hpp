@@ -1,4 +1,4 @@
-// ResQR transfer layer in C++ (spec/resqr.yaml `frame` and `code`): frames, the fountain encoder, the
+// QRetina transfer layer in C++ (spec/qretina.yaml `frame` and `code`): frames, the fountain encoder, the
 // GF(2) decoder and a receiver of interleaved streams. It produces the same frames and containers
 // as protocol/fountain.js, word for word, and is checked against test/vectors/streams.txt.
 // Containers are opened by the JS side; this layer only moves bytes.
@@ -13,9 +13,9 @@
 #include <unordered_set>
 #include <vector>
 
-namespace resqr {
+namespace qretina {
 
-inline constexpr std::string_view PROTOCOL = "RQR6EAC80";
+inline constexpr std::string_view PROTOCOL = "QRT112C90";
 inline constexpr uint32_t MAX_N = 4096, MAX_LEN = 1u << 22, MAX_B = 2900;
 
 using Bytes = std::vector<uint8_t>;
@@ -86,4 +86,4 @@ class Receiver {
   std::unordered_map<std::string, double> closed_; // stream id -> ignored until this time
 };
 
-}  // namespace resqr
+}  // namespace qretina

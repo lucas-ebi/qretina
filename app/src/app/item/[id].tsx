@@ -28,7 +28,7 @@ export default function Item() {
         <Label bold>{meta.name}</Label>
         <Label dim size={14}>{kb(meta.size)} received {new Date(meta.received).toLocaleString()}</Label>
         {file && <Label dim size={14}>{file.mime} · {kb(file.bytes.length)}</Label>}
-        {code && <Label dim size={14}>{code.type} program, version {code.version}, signed by {code.publisher?.name ?? 'ResQR'} (key {code.signer})</Label>}
+        {code && <Label dim size={14}>{code.type} program, version {code.version}, signed by {code.publisher?.name ?? 'QRetina'} (key {code.signer})</Label>}
         {meta.private && <Label dim size={14}>Private: sealed with a group key.</Label>}
         {meta.kind === 'locked' && <Label dim size={14}>Sealed with a group key you do not hold (id {meta.keyId}). You can still pass it on; it opens once the key is added in Settings.</Label>}
         {'error' in view && <Label size={14}>Cannot be opened now: {view.error}</Label>}

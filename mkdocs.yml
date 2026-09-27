@@ -1,4 +1,4 @@
-site_name: ResQR
+site_name: QRetina
 site_description: Files and signed programs through QR codes, with no network.
 repo_url: https://github.com/lucas-ebi/qr-bootstrap
 edit_uri: edit/main/docs/

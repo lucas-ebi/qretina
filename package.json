@@ -1,5 +1,5 @@
 {
-  "name": "resqr",
+  "name": "qretina",
   "license": "MIT",
   "repository": "github:lucas-ebi/qr-bootstrap",
   "private": true,
@@ -9,8 +9,8 @@
     "app"
   ],
   "scripts": {
-    "test": "node --test test/*.test.mjs && npm test -w @resqr/app",
-    "check": "npm test && npm run typecheck -w @resqr/app"
+    "test": "node --test test/*.test.mjs && npm test -w @qretina/app",
+    "check": "npm test && npm run typecheck -w @qretina/app"
   },
   "devDependencies": {
     "yaml": "^2.9.1"

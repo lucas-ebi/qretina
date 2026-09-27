@@ -16,8 +16,8 @@ test('test/vectors/streams.txt is what the reference implementation produces', (
 const cxx = ['c++', 'g++', 'clang++'].find(c => spawnSync(c, ['--version']).status === 0);
 
 test('the C++ core reproduces the vectors', { skip: !cxx && 'no C++ compiler' }, () => {
-  const exe = join(mkdtempSync(join(tmpdir(), 'resqr-native-')), 'test');
-  execFileSync(cxx, ['-std=c++17', '-O2', '-Wall', '-Wextra', '-Werror', '-o', exe, 'native/core/resqr.cpp', 'native/core/test.cpp'], { cwd: root });
+  const exe = join(mkdtempSync(join(tmpdir(), 'qretina-native-')), 'test');
+  execFileSync(cxx, ['-std=c++17', '-O2', '-Wall', '-Wextra', '-Werror', '-o', exe, 'native/core/qretina.cpp', 'native/core/test.cpp'], { cwd: root });
   const out = execFileSync(exe, [file], { encoding: 'utf8' });
   console.log('  ' + out.trim());
 });

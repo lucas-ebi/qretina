@@ -2,7 +2,7 @@
 import { File } from 'expo-file-system';
 import { useState } from 'react';
 import { Alert, ScrollView, Switch, TextInput, View } from 'react-native';
-import { b64url, keyFromPassphrase, keyId } from '@resqr/protocol/containers.js';
+import { b64url, keyFromPassphrase, keyId } from '@qretina/protocol/containers.js';
 import { Button, Card, Label, useColors } from '../components/ui.tsx';
 import { appKeys, rootKeys } from '../lib/config.ts';
 import { useApp } from '../lib/state.tsx';
@@ -33,7 +33,7 @@ export default function Settings() {
     if (r.canceled) return;
     try {
       const k = JSON.parse(await r.result.text()) as { label?: string; key: string }, key = b64url(k.key);
-      if (key.length !== 32) throw new Error('not a ResQR key file');
+      if (key.length !== 32) throw new Error('not a QRetina key file');
       await addKey(key, label || k.label || '');
     } catch (e) {
       Alert.alert('Could not read the key file', (e as Error).message);
@@ -47,7 +47,7 @@ export default function Settings() {
           <Label bold>Run signed programs</Label>
           <Switch value={app.trust.runPrograms} onValueChange={runPrograms => app.setTrust({ ...app.trust, runPrograms })} />
         </View>
-        <Label dim size={14}>Programs run only when signed by ResQR or a publisher it certified, in a sandbox without network or access to your data.</Label>
+        <Label dim size={14}>Programs run only when signed by QRetina or a publisher it certified, in a sandbox without network or access to your data.</Label>
       </Card>
 
       <Card>

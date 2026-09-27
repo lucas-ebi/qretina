@@ -3,7 +3,7 @@
 // apart, in the platform's secure storage.
 import { Directory, File, Paths } from 'expo-file-system';
 import * as SecureStore from 'expo-secure-store';
-import { b64url, toB64url } from '@resqr/protocol/containers.js';
+import { b64url, toB64url } from '@qretina/protocol/containers.js';
 import type { Meta } from './inbox.ts';
 import { emptyTrust, type Trust } from './trust.ts';
 

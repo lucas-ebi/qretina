@@ -6,7 +6,7 @@ name: Certify publisher
 #   gh workflow run certify.yml -f action=crl -f number=2 -f revoke=5,9
 # then fetch the result with:  gh run download <run-id>
 #
-# A publisher creates its own key pair with `node tools/resqr.mjs keygen` and sends only the public
+# A publisher creates its own key pair with `node tools/qretina.mjs keygen` and sends only the public
 # key. It signs its programs with `sign --cert <the certificate> --key <its private key>`.
 
 on:
@@ -57,15 +57,15 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/out"
           if [ "$ACTION" = cert ]; then
-            node tools/resqr.mjs cert --pub "$PUB" --name "$NAME" --ns "$NS" --days "$DAYS" \
+            node tools/qretina.mjs cert --pub "$PUB" --name "$NAME" --ns "$NS" --days "$DAYS" \
               --out "$RUNNER_TEMP/out/publisher.cert"
           else
-            node tools/resqr.mjs crl --number "$NUMBER" ${REVOKE:+--revoke "$REVOKE"} \
+            node tools/qretina.mjs crl --number "$NUMBER" ${REVOKE:+--revoke "$REVOKE"} \
               --gif "$RUNNER_TEMP/out/crl-$NUMBER.gif"
           fi
         env:
-          RESQR_SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
-          RESQR_APP_KEY: ${{ secrets.APP_KEY }}
+          QRETINA_SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          QRETINA_APP_KEY: ${{ secrets.APP_KEY }}
           ACTION: ${{ inputs.action }}
           PUB: ${{ inputs.pub }}
           NAME: ${{ inputs.name }}
@@ -75,6 +75,6 @@ jobs:
           REVOKE: ${{ inputs.revoke }}
       - uses: actions/upload-artifact@v4
         with:
-          name: resqr-${{ inputs.action }}
+          name: qretina-${{ inputs.action }}
           path: ${{ runner.temp }}/out/
           retention-days: 14

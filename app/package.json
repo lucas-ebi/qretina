@@ -1,9 +1,9 @@
 {
-  "name": "@resqr/app",
+  "name": "@qretina/app",
   "version": "1.0.0",
   "main": "expo-router/entry",
   "dependencies": {
-    "@resqr/protocol": "*",
+    "@qretina/protocol": "*",
     "@shopify/react-native-skia": "2.6.2",
     "expo": "~57.0.25",
     "expo-brightness": "~57.0.2",

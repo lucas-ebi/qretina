@@ -1,9 +1,9 @@
 name: Site
 
-# Publishes resqr.app (site/) on GitHub Pages: the page a phone without ResQR opens from a
+# Publishes qretina.app (site/) on GitHub Pages: the page a phone without QRetina opens from a
 # countdown, and the files that let the link open the app when it is installed. Set the
 # repository variables APPLE_TEAM_ID and ANDROID_CERT_SHA256 once the apps are signed, and point
-# the resqr.app domain at GitHub Pages.
+# the qretina.app domain at GitHub Pages.
 
 on:
   push:

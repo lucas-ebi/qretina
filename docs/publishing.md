@@ -15,7 +15,7 @@ Root public keys and app keys are built into the app. Changing them needs a new 
 
 ```
 gh api -X PUT repos/OWNER/REPO/environments/signing
-node tools/resqr.mjs keygen - | gh secret set SIGNING_KEY --env signing
+node tools/qretina.mjs keygen - | gh secret set SIGNING_KEY --env signing
 gh variable set TRUSTED_KEYS --body "<the printed public key>"
 node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))" | gh secret set APP_KEYS --env signing
 ```
@@ -38,7 +38,7 @@ signature supersedes an earlier one.
 A publisher, such as a relief organisation, makes its own key pair and sends only the public key:
 
 ```
-node tools/resqr.mjs keygen publisher.json
+node tools/qretina.mjs keygen publisher.json
 ```
 
 The root certifies it for ids that begin with a namespace, for a period:
@@ -50,7 +50,7 @@ gh workflow run certify.yml -f action=cert -f pub=<public key> -f name="Relief O
 The publisher then signs its own programs, which carry the certificate with them:
 
 ```
-node tools/resqr.mjs sign app.html --id org.relief.maps --cert publisher.cert --key publisher.json --gif maps.gif
+node tools/qretina.mjs sign app.html --id org.relief.maps --cert publisher.cert --key publisher.json --gif maps.gif
 ```
 
 A phone accepts such a program when the certificate was issued by a root key it holds, is valid at

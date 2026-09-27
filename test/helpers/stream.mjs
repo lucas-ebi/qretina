@@ -1,7 +1,7 @@
 // Runs a container through frames and a Receiver, as a camera would, and opens what arrives.
 import { Receiver } from '../../protocol/fountain.js';
 import { openContainer } from '../../protocol/containers.js';
-import { makeFrames } from '../../tools/resqr.mjs';
+import { makeFrames } from '../../tools/qretina.mjs';
 
 export const enc = s => new TextEncoder().encode(s);
 export const dec = b => new TextDecoder().decode(b);

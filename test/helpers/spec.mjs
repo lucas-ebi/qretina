@@ -1,9 +1,9 @@
-// Loads spec/resqr.yaml and derives the protocol identifier from its `parameters`.
+// Loads spec/qretina.yaml and derives the protocol identifier from its `parameters`.
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { parse } from 'yaml';
 
-export const spec = parse(readFileSync(new URL('../../spec/resqr.yaml', import.meta.url), 'utf8'));
+export const spec = parse(readFileSync(new URL('../../spec/qretina.yaml', import.meta.url), 'utf8'));
 
 // RFC 8785 canonical JSON. The spec holds only objects, arrays, strings, booleans and integers, for
 // which JSON.stringify already produces the canonical form once object keys are sorted by UTF-16
@@ -16,4 +16,4 @@ export function canonical(v) {
 }
 
 export const protocolId = (parameters = spec.parameters) =>
-  'RQR' + createHash('sha256').update(canonical(parameters)).digest('hex').slice(0, 6).toUpperCase();
+  'QRT' + createHash('sha256').update(canonical(parameters)).digest('hex').slice(0, 6).toUpperCase();

@@ -43,18 +43,18 @@ jobs:
       - run: npx expo prebuild --platform android --no-install
         working-directory: app
         env:
-          RESQR_RELEASE: '1'
+          QRETINA_RELEASE: '1'
           TRUSTED_KEYS: ${{ vars.TRUSTED_KEYS }}
           APP_KEYS: ${{ secrets.APP_KEYS }}
       - run: ./gradlew assembleRelease --no-daemon
         working-directory: app/android
         env:
-          RESQR_RELEASE: '1'
+          QRETINA_RELEASE: '1'
           TRUSTED_KEYS: ${{ vars.TRUSTED_KEYS }}
           APP_KEYS: ${{ secrets.APP_KEYS }}
       - uses: actions/upload-artifact@v4
         with:
-          name: resqr-apk
+          name: qretina-apk
           path: app/android/app/build/outputs/apk/release/*.apk
           retention-days: 30
 
@@ -75,6 +75,6 @@ jobs:
         working-directory: app
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-          RESQR_RELEASE: '1'
+          QRETINA_RELEASE: '1'
           TRUSTED_KEYS: ${{ vars.TRUSTED_KEYS }}
           APP_KEYS: ${{ secrets.APP_KEYS }}

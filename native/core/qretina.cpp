@@ -1,11 +1,11 @@
-#include "resqr.hpp"
+#include "qretina.hpp"
 
 #include <algorithm>
 #include <cstring>
 #include <limits>
 #include <stdexcept>
 
-namespace resqr {
+namespace qretina {
 
 // ---- PRNG and masks -------------------------------------------------------------------
 
@@ -268,4 +268,4 @@ Pushed Receiver::push(std::string_view raw, double now) {
   return r;
 }
 
-}  // namespace resqr
+}  // namespace qretina

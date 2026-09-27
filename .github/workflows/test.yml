@@ -33,9 +33,9 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run typecheck -w @resqr/app
-      - run: npm test -w @resqr/app
+      - run: npm run typecheck -w @qretina/app
+      - run: npm test -w @qretina/app
       - run: npx expo-doctor
         working-directory: app
       - name: Bundle for Android and iOS
-        run: npm run bundle -w @resqr/app
+        run: npm run bundle -w @qretina/app

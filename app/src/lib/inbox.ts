@@ -1,8 +1,8 @@
 // Turns scanned strings into items: reassembles streams, opens what arrives under the current
 // keys and trust state, and describes it for the library. No React Native imports, so it is tested
 // in Node (test/inbox.test.ts).
-import { Receiver, type Progress } from '@resqr/protocol/fountain.js';
-import { openContainer, type Key, type Opened } from '@resqr/protocol/containers.js';
+import { Receiver, type Progress } from '@qretina/protocol/fountain.js';
+import { openContainer, type Key, type Opened } from '@qretina/protocol/containers.js';
 import { checkVersion, type Trust } from './trust.ts';
 
 export type Kind = 'file' | 'code' | 'cert' | 'crl' | 'locked';

@@ -1,4 +1,4 @@
-// Containers (spec/resqr.yaml `containers`): signed code, files, certificates, revocation lists and
+// Containers (spec/qretina.yaml `containers`): signed code, files, certificates, revocation lists and
 // sealed (encrypted) containers. Pure JS. Code runs only when signed by a root key, or by a
 // publisher whose certificate a root key issued; files are data and are never run, whatever their type.
 import { xchacha20poly1305 } from '@noble/ciphers/chacha.js';
@@ -10,7 +10,7 @@ import { deflateSync, inflateSync, strFromU8, strToU8 } from 'fflate';
 
 export const CODE = 1, FILE = 2, FILE_STORED = 3, CERT = 4, CRL = 5, SEALED = 6;
 export const TYPES = ['html', 'json'];
-export const DOMAIN = strToU8('resqr code\0'), CERT_DOMAIN = strToU8('resqr cert\0'), CRL_DOMAIN = strToU8('resqr crl\0');
+export const DOMAIN = strToU8('qretina code\0'), CERT_DOMAIN = strToU8('qretina cert\0'), CRL_DOMAIN = strToU8('qretina crl\0');
 const ID = /^[A-Za-z0-9_.-]{1,64}$/;
 
 export const concat = (...parts) => {
@@ -172,18 +172,18 @@ export function openFile(container) {
 // the content, so sealing one item under one key always gives the same bytes and the same stream:
 // relays of the same item add up. It reveals only whether two sealed containers are equal.
 
-const KEY_DOMAIN = strToU8('resqr key\0');
+const KEY_DOMAIN = strToU8('qretina key\0');
 
 export const keyId = key => hex(sha256(concat(KEY_DOMAIN, key)).subarray(0, 8));
 
 export const keyFromPassphrase = passphrase =>
-  scrypt(strToU8(passphrase.normalize('NFC')), strToU8('resqr psk'), { N: 1 << 15, r: 8, p: 1, dkLen: 32 });
+  scrypt(strToU8(passphrase.normalize('NFC')), strToU8('qretina psk'), { N: 1 << 15, r: 8, p: 1, dkLen: 32 });
 
 export function seal(key, inner) {
   if (key.length !== 32) throw new Error('a sealing key is 32 bytes');
   const id = sha256(concat(KEY_DOMAIN, key)).subarray(0, 8), ad = concat([SEALED], id);
-  const nonce = hmac(sha256, hmac(sha256, key, strToU8('resqr iv')), inner).subarray(0, 24);
-  return concat(ad, nonce, xchacha20poly1305(hmac(sha256, key, strToU8('resqr enc')), nonce, ad).encrypt(inner));
+  const nonce = hmac(sha256, hmac(sha256, key, strToU8('qretina iv')), inner).subarray(0, 24);
+  return concat(ad, nonce, xchacha20poly1305(hmac(sha256, key, strToU8('qretina enc')), nonce, ad).encrypt(inner));
 }
 
 // Returns the inner container, or null when none of `keys` matches the container's key id.
@@ -193,7 +193,7 @@ export function unseal(container, keys) {
   if (!key) return null;
   const ad = container.subarray(0, 9), nonce = container.subarray(9, 33);
   try {
-    return xchacha20poly1305(hmac(sha256, key, strToU8('resqr enc')), nonce, ad).decrypt(container.subarray(33));
+    return xchacha20poly1305(hmac(sha256, key, strToU8('qretina enc')), nonce, ad).decrypt(container.subarray(33));
   } catch {
     throw new Error('sealed container does not authenticate');
   }

@@ -8,8 +8,8 @@ import { useKeepAwake } from 'expo-keep-awake';
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
-import { blockFor, encoder, streamId } from '@resqr/protocol/fountain.js';
-import { packFile } from '@resqr/protocol/containers.js';
+import { blockFor, encoder, streamId } from '@qretina/protocol/fountain.js';
+import { packFile } from '@qretina/protocol/containers.js';
 import { QrCode } from '../components/QrCode.tsx';
 import { Button, Card, Label, Screen, kb, useColors } from '../components/ui.tsx';
 import { LINK, appKeys } from '../lib/config.ts';
@@ -65,7 +65,7 @@ export default function Broadcast() {
         <View style={{ flex: 1 }}><Button title="Choose a photo" onPress={pickPhoto} /></View>
       </View>
       <Choice label="Audience" value={group} options={[-1, ...app.keyring.map((_, i) => i)]}
-        show={i => (i < 0 ? 'Anyone with ResQR' : `Private: ${app.keyring[i].label}`)} onChange={setGroup} />
+        show={i => (i < 0 ? 'Anyone with QRetina' : `Private: ${app.keyring[i].label}`)} onChange={setGroup} />
       <Choice label="Bytes per code" value={app.tx.density} options={DENSITY} show={String} onChange={density => set({ density })} />
       <Choice label="Codes per second" value={app.tx.fps} options={FPS} show={String} onChange={fps => set({ fps })} />
       <Choice label="Codes on screen" value={app.tx.codes} options={[1, 2] as const} show={String} onChange={codes => set({ codes })} />
@@ -137,7 +137,7 @@ function Live({ id, group, prefs, onStop }: { id: string; group?: Uint8Array; pr
         Array.from({ length: prefs.codes }, (_, i) => <QrCode key={i} text={enc.frame(seed(i))} size={side} />)
       )}
       <Text style={{ color: '#333', fontSize: 14 }}>
-        {counting ? 'Scan with the camera app to open ResQR' : `${prefs.fps * prefs.codes} codes/s · ${kb(prefs.fps * prefs.codes * enc.b)}/s · ${enc.n} blocks`} · tap to stop
+        {counting ? 'Scan with the camera app to open QRetina' : `${prefs.fps * prefs.codes} codes/s · ${kb(prefs.fps * prefs.codes * enc.b)}/s · ${enc.n} blocks`} · tap to stop
       </Text>
     </Pressable>
   );

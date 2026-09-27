@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ed25519 } from '@noble/curves/ed25519.js';
 import { CODE, DOMAIN, b64url, concat, deflate, issueCert, issueCrl, keyFromPassphrase, keyId, loadKey, openCert, openCode, openContainer, openFile, packFile, seal, signCode, toB64url } from '../protocol/containers.js';
-import { keygen, makeFrames, sign } from '../tools/resqr.mjs';
+import { keygen, makeFrames, sign } from '../tools/qretina.mjs';
 import { dec, enc, receive, send } from './helpers/stream.mjs';
 
 const html = '<!doctype html><title>demo</title>' + '<p>hello</p>'.repeat(200);

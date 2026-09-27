@@ -6,7 +6,7 @@
       "android": { "buildType": "apk" }
     },
     "production": {
-      "env": { "RESQR_RELEASE": "1" },
+      "env": { "QRETINA_RELEASE": "1" },
       "autoIncrement": true
     }
   }

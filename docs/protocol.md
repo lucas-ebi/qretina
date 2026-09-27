@@ -1,14 +1,14 @@
 # Protocol
 
-The normative parameters are in [`spec/resqr.yaml`](https://github.com/lucas-ebi/qr-bootstrap/blob/main/spec/resqr.yaml).
+The normative parameters are in [`spec/qretina.yaml`](https://github.com/lucas-ebi/qr-bootstrap/blob/main/spec/qretina.yaml).
 This page explains them. The key words MUST, MUST NOT, SHOULD and MAY are used as in RFC 2119.
 
 ## Identifier
 
-The protocol identifier is `RQR` followed by the first six hexadecimal digits, in upper case, of
+The protocol identifier is `QRT` followed by the first six hexadecimal digits, in upper case, of
 SHA-256 over the canonical JSON (RFC 8785) of `parameters`. Any change to the parameters gives a new
 identifier, and a receiver ignores frames that carry another one instead of misreading them. The
-current identifier is `RQR6EAC80`.
+current identifier is `QRT112C90`.
 
 ## Overview
 
@@ -57,7 +57,7 @@ The cost is O(n²·b/32) word operations per stream, spread over the reception.
 The first byte of a container is its tag.
 
 **Code (tag 1).** A program (`html`) or data (`json`), compressed and signed with Ed25519. The
-signature covers the domain prefix `resqr code\0` and everything after the signature. It is made
+signature covers the domain prefix `qretina code\0` and everything after the signature. It is made
 either by a *root key*, which the receiver holds, or by a *publisher key*, in which case the
 container embeds the publisher's certificate. The signature MUST verify before the body is
 decompressed. A receiver MUST NOT run a container whose version is lower than the highest it has
@@ -98,4 +98,4 @@ content and names but not the size or the timing of a transfer, and there is no 
 ## Countdown
 
 A sender MAY precede the data frames with a countdown of QR codes of a link that opens the
-receiving app (`HTTPS://RESQR.APP/SCAN`). The link is not a frame, and receivers ignore it.
+receiving app (`HTTPS://QRETINA.APP/SCAN`). The link is not a frame, and receivers ignore it.

@@ -6,9 +6,9 @@
 #include <random>
 #include <sstream>
 
-#include "resqr.hpp"
+#include "qretina.hpp"
 
-using namespace resqr;
+using namespace qretina;
 
 static int failures = 0;
 #define CHECK(cond, what) do { if (!(cond)) { failures++; std::fprintf(stderr, "FAIL %s\n", std::string(what).c_str()); } } while (0)

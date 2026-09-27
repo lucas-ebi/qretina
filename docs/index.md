@@ -1,6 +1,6 @@
-# ResQR
+# QRetina
 
-ResQR moves files and signed programs between devices as a stream of QR codes, shown on one
+QRetina moves files and signed programs between devices as a stream of QR codes, shown on one
 screen and filmed by another device's camera. It needs no network, pairing or radio, and works
 entirely offline once installed.
 
@@ -9,7 +9,7 @@ entirely offline once installed.
   broadcast at any point.
 - **Rateless.** A broadcast never runs out of new codes, and two phones showing the same item
   speed the transfer up.
-- **Signed programs.** HTML programs signed by ResQR, or by a publisher it certified, can run in a
+- **Signed programs.** HTML programs signed by QRetina, or by a publisher it certified, can run in a
   sandbox without network access or access to the phone's data. Files are never run.
 - **Sealed.** Broadcasts are unreadable to other QR readers, and can be made private to holders of
   a group key.

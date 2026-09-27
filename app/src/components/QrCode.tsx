@@ -1,7 +1,7 @@
 // One QR code, drawn as a single Skia path so it can change 15 to 30 times a second.
 // Always black on white, with the 4-module quiet zone the QR standard asks for.
 import { Canvas, Group, Path, Skia } from '@shopify/react-native-skia';
-import qrcode from '@resqr/protocol/vendor/qrcode.mjs';
+import qrcode from '@qretina/protocol/vendor/qrcode.mjs';
 import { useMemo } from 'react';
 
 const ALPHANUMERIC = /^[0-9A-Z $%*+\-./:]*$/;

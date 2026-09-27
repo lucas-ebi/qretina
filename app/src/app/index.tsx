@@ -6,32 +6,27 @@ import { useCallback, useRef, useState } from 'react';
 import { Alert, View } from 'react-native';
 import type { Progress } from '@qretina/protocol/fountain.js';
 import { Button, Card, Label, Screen, kb, useColors } from '../components/ui.tsx';
+import { useBusy } from '../lib/busy.tsx';
+import type { Event } from '../lib/inbox.ts';
 import { useApp } from '../lib/state.tsx';
-import { approve, isApproved } from '../lib/trust.ts';
+import { approve, isApproved, withCrl } from '../lib/trust.ts';
 
 type Stream = Progress & { started: number; updated: number };
 
 export default function Receive() {
-  const app = useApp(), c = useColors(), focused = useIsFocused();
+  const app = useApp(), c = useColors(), focused = useIsFocused(), busy = useBusy();
   const [permission, requestPermission] = useCameraPermissions();
   const [streams, setStreams] = useState<Record<string, Stream>>({});
   const [last, setLast] = useState<string | null>(null);
-  const seen = useRef(0);
+  const assembling = useRef(false);
 
-  const onCode = useCallback(({ data }: { data: string }) => {
-    seen.current++;
-    const e = app.inbox.push(data);
-    if (!e) return;
-    const now = Date.now();
-    if (e.kind === 'progress') {
-      setStreams(s => ({ ...s, [e.progress.id]: { ...e.progress, started: s[e.progress.id]?.started ?? now, updated: now } }));
-      return;
-    }
+  const completed = useCallback((e: Event) => {
+    if (e.kind === 'progress' || e.kind === 'ready') return;
     setStreams(({ [e.kind === 'item' ? e.meta.id : e.id]: _, ...rest }) => rest);
     if (e.kind === 'error') return setLast(`Refused: ${e.error}`);
     app.add(e.meta, e.container);
     setLast(`Received ${e.meta.name}${e.meta.private ? ' (private)' : ''}`);
-    if (e.opened.crl) app.setTrust({ ...app.trust, crl: e.opened.crl.number > app.trust.crl.number ? e.opened.crl : app.trust.crl });
+    if (e.opened.crl) app.setTrust(withCrl(app.trust, e.opened.crl));
     const code = e.opened.code;
     if (code?.type === 'html' && app.trust.runPrograms) {
       const run = () => { app.setTrust(approve(app.trust, code)); router.push(`/run/${e.meta.id}`); };
@@ -40,6 +35,25 @@ export default function Receive() {
         [{ text: 'Not now', style: 'cancel' }, { text: 'Run', onPress: run }]);
     }
   }, [app]);
+
+  const onCode = useCallback(({ data }: { data: string }) => {
+    if (assembling.current) return;
+    const e = app.inbox.push(data);
+    if (!e) return;
+    const now = Date.now();
+    if (e.kind === 'progress') {
+      setStreams(s => ({ ...s, [e.progress.id]: { ...e.progress, started: s[e.progress.id]?.started ?? now, updated: now } }));
+      return;
+    }
+    if (e.kind === 'ready') {
+      assembling.current = true;
+      busy(`Assembling ${kb(e.progress.len)}…`, () => app.inbox.finish(e.progress.id))
+        .then(completed)
+        .finally(() => { assembling.current = false; });
+      return;
+    }
+    completed(e);
+  }, [app, busy, completed]);
 
   if (!permission) return <Screen />;
   if (!permission.granted) {

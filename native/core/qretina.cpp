@@ -255,16 +255,39 @@ Pushed Receiver::push(std::string_view raw, double now) {
   const bool done = it->d.add(f->seed, f->data);
   r.rank = it->d.rank;
   if (!done) { r.status = Pushed::Progress; return r; }
-  r.container = it->d.solve();
+  Stream s = std::move(*it);
   streams_.erase(it);
-  if (streamId(r.container) != r.id) {
-    closed_[r.id] = now + 5000;
-    r.container.clear();
-    r.status = Pushed::Corrupt;
+  closed_[r.id] = std::numeric_limits<double>::infinity();
+  if (defer_) {
+    ready_.push_back(std::move(s));
+    r.status = Pushed::Ready;
     return r;
   }
-  closed_[r.id] = std::numeric_limits<double>::infinity();
-  r.status = Pushed::Complete;
+  Pushed a = assemble(r.id, s.d);
+  if (a.status == Pushed::Corrupt) closed_[r.id] = now + 5000;
+  return a;
+}
+
+std::optional<Decoder> Receiver::take(const std::string &id) {
+  for (auto it = ready_.begin(); it != ready_.end(); ++it) {
+    if (it->id != id) continue;
+    Decoder d = std::move(it->d);
+    ready_.erase(it);
+    return d;
+  }
+  return std::nullopt;
+}
+
+Pushed Receiver::assemble(const std::string &id, Decoder &d) {
+  Pushed r;
+  r.id = id, r.n = d.n, r.len = d.len, r.rank = d.rank;
+  r.container = d.solve();
+  if (streamId(r.container) != id) {
+    r.container.clear();
+    r.status = Pushed::Corrupt;
+  } else {
+    r.status = Pushed::Complete;
+  }
   return r;
 }
 

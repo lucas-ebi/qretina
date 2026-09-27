@@ -66,7 +66,7 @@ class Decoder {
 };
 
 struct Pushed {
-  enum Status { Ignored, Progress, Complete, Corrupt } status = Ignored;
+  enum Status { Ignored, Progress, Ready, Complete, Corrupt } status = Ignored;
   std::string id;
   uint32_t n = 0, len = 0, rank = 0;
   Bytes container;
@@ -74,15 +74,23 @@ struct Pushed {
 
 class Receiver {
  public:
-  explicit Receiver(size_t maxStreams = 8) : max_(maxStreams) {}
+  // With deferSolve, a completed stream is reported Ready and kept until take(); reassembling it
+  // (assemble) can then happen elsewhere, such as on another thread.
+  explicit Receiver(size_t maxStreams = 8, bool deferSolve = false) : max_(maxStreams), defer_(deferSolve) {}
   // Feeds one scanned string; `now` is in milliseconds.
   Pushed push(std::string_view raw, double now);
   void hold(const std::string &id, double until) { closed_[id] = until; }
+  // Removes and returns the decoder of a stream reported Ready.
+  std::optional<Decoder> take(const std::string &id);
+  // Reassembles a complete stream and checks it against its id: Complete, or Corrupt.
+  static Pushed assemble(const std::string &id, Decoder &d);
 
  private:
   struct Stream { std::string id; Decoder d; };
   size_t max_;
+  bool defer_;
   std::vector<Stream> streams_;                     // oldest first
+  std::vector<Stream> ready_;                       // complete, waiting for take()
   std::unordered_map<std::string, double> closed_; // stream id -> ignored until this time
 };
 

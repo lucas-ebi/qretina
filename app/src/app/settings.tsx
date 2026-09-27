@@ -5,6 +5,8 @@ import { useState } from 'react';
 import { Alert, ScrollView, Switch, TextInput, View } from 'react-native';
 import { b64url, keyFromPassphrase, keyId } from '@qretina/protocol/containers.js';
 import { Button, Card, Label, useColors } from '../components/ui.tsx';
+import { Mark } from '../components/Mark.tsx';
+import Constants from 'expo-constants';
 import { appKeys, rootKeys } from '../lib/config.ts';
 import { useApp } from '../lib/state.tsx';
 import { resetApprovals } from '../lib/trust.ts';
@@ -84,6 +86,12 @@ export default function Settings() {
       </Card>
 
       <Button title="Diagnostics" onPress={() => router.push('/diagnostics')} />
+
+      <View style={{ alignItems: 'center', gap: 6, paddingVertical: 16 }}>
+        <Mark width={160} />
+        <Label bold>QRetina {Constants.expoConfig?.version}</Label>
+        <Label dim size={14}>Files through light, with no network.</Label>
+      </View>
     </ScrollView>
   );
 }

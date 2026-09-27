@@ -155,14 +155,17 @@ export class Decoder {
 // ---- Receiver: interleaved streams, each completed exactly once -------------
 
 export class Receiver {
-  constructor({ maxStreams = 8 } = {}) {
-    Object.assign(this, { maxStreams, streams: new Map(), closed: new Map() });
+  // With `deferSolve`, a completed stream is only reported ({ ready: true }) and finish(id) then
+  // reassembles it, so an app can show that it is working first: for megabytes it takes a while.
+  constructor({ maxStreams = 8, deferSolve = false } = {}) {
+    Object.assign(this, { maxStreams, deferSolve, streams: new Map(), closed: new Map(), ready: new Map() });
   }
 
   hold(id, ms) { this.closed.set(id, Date.now() + ms); }
 
   // Feeds one scanned string. Returns null (not a frame, or ignored), { id, n, len, rank }
-  // (progress), the same with `container` once complete, or with `error` if the result is corrupt.
+  // (progress), the same with `container` once complete (or `ready` with deferSolve), or with
+  // `error` if the result is corrupt.
   push(raw) {
     const f = parseFrame(raw);
     if (!f || Date.now() < (this.closed.get(f.id) ?? 0)) return null;
@@ -175,12 +178,26 @@ export class Receiver {
     if (!d.add(f.seed, f.data)) return { ...progress, rank: d.rank };
 
     this.streams.delete(f.id);
-    const container = d.solve();
-    if (streamId(container) !== f.id) {
-      this.closed.set(f.id, Date.now() + 5000);
-      return { ...progress, rank: d.n, error: 'corrupt stream' };
-    }
     this.closed.set(f.id, Infinity);
-    return { ...progress, rank: d.n, container };
+    if (!this.deferSolve) return solve(this, f.id, d);
+    this.ready.set(f.id, d);
+    return { ...progress, rank: d.n, ready: true };
   }
+
+  // Reassembles a stream that push() reported ready.
+  finish(id) {
+    const d = this.ready.get(id);
+    if (!d) return null;
+    this.ready.delete(id);
+    return solve(this, id, d);
+  }
+}
+
+function solve(rx, id, d) {
+  const progress = { id, n: d.n, len: d.len, rank: d.n }, container = d.solve();
+  if (streamId(container) !== id) {
+    rx.closed.set(id, Date.now() + 5000);
+    return { ...progress, error: 'corrupt stream' };
+  }
+  return { ...progress, container };
 }

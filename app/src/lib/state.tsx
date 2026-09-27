@@ -5,6 +5,7 @@ import { packFile } from '@qretina/protocol/containers.js';
 import { appKeys, bundledCrl, rootKeys } from './config.ts';
 import { Inbox, describe, type Keys, type Meta } from './inbox.ts';
 import { outgoing } from './outgoing.ts';
+import { engine } from './engine.ts';
 import * as store from './store.ts';
 import { withCrl, type Trust } from './trust.ts';
 
@@ -42,7 +43,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const ref = useRef({ trust, keyring });
   ref.current = { trust, keyring };
   const keys = useCallback((): Keys => ({ roots: rootKeys, keys: [...appKeys, ...ref.current.keyring.map(k => k.key)] }), []);
-  const inbox = useMemo(() => new Inbox(keys, () => ref.current.trust), [keys]);
+  const inbox = useMemo(() => new Inbox(keys, () => ref.current.trust, engine.receiver()), [keys]);
 
   useEffect(() => { store.loadKeyring().then(setKeyringState); }, []);
 

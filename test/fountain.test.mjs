@@ -130,3 +130,12 @@ test('a 4 MiB container in about 3,500 blocks decodes in bounded time', () => {
   assert.deepEqual(out, container);
   assert.ok(ms < 120_000);
 });
+
+test('with deferSolve, a completed stream is reported ready and reassembled by finish()', () => {
+  const container = noise(5000), e = encoder(container, 300), rx = new Receiver({ deferSolve: true });
+  let r;
+  for (let s = 1; !(r = rx.push(e.frame(s)))?.ready; s++) assert.equal(r?.container, undefined);
+  assert.equal(rx.push(e.frame(999)), null, 'no more frames taken once ready');
+  assert.deepEqual(rx.finish(r.id).container, container);
+  assert.equal(rx.finish(r.id), null, 'finished once');
+});

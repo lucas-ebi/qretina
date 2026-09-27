@@ -4,9 +4,11 @@ import { Pressable, StyleSheet, Text, useColorScheme, View, type ViewStyle } fro
 
 export function useColors() {
   const dark = useColorScheme() === 'dark';
+  // The brand: the fox eye's steel-blue iris for actions, its near-black liner for text.
+  // Text on `accent` uses `onAccent`; each pair passes 4.5:1.
   return dark
-    ? { bg: '#0b0d0c', fg: '#e8ece9', dim: '#8a948e', card: '#161a18', accent: '#3ddc84', danger: '#ff6b6b' }
-    : { bg: '#f6f7f6', fg: '#101312', dim: '#5d6661', card: '#ffffff', accent: '#0a7d3b', danger: '#c62828' };
+    ? { bg: '#0A1E2C', fg: '#EEF3F6', dim: '#9AAAB6', card: '#12293A', accent: '#5A91B3', onAccent: '#0A1E2C', danger: '#FF8A80' }
+    : { bg: '#F4F7F9', fg: '#14212B', dim: '#55616B', card: '#FFFFFF', accent: '#24557A', onAccent: '#FFFFFF', danger: '#B3261E' };
 }
 
 export function Screen({ children, style }: { children?: ReactNode; style?: ViewStyle }) {
@@ -21,7 +23,7 @@ export function Label({ children, dim, size = 16, bold }: { children: ReactNode;
 
 export function Button({ title, onPress, kind = 'plain', disabled }: { title: string; onPress: () => void; kind?: 'plain' | 'primary' | 'danger'; disabled?: boolean }) {
   const c = useColors();
-  const bg = kind === 'primary' ? c.accent : c.card, fg = kind === 'primary' ? '#fff' : kind === 'danger' ? c.danger : c.fg;
+  const bg = kind === 'primary' ? c.accent : c.card, fg = kind === 'primary' ? c.onAccent : kind === 'danger' ? c.danger : c.fg;
   return (
     <Pressable onPress={onPress} disabled={disabled} accessibilityRole="button"
       style={({ pressed }) => [styles.button, { backgroundColor: bg, opacity: disabled ? 0.4 : pressed ? 0.7 : 1 }]}>

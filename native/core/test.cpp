@@ -78,6 +78,23 @@ int main(int argc, char **argv) {
   }
   finish();
 
+  // Deferred reassembly: Ready first, then take() and assemble().
+  {
+    std::mt19937 g(3);
+    Bytes c(5000);
+    for (auto &x : c) x = uint8_t(g());
+    Encoder e(c, 300);
+    Receiver deferred(8, true);
+    Pushed r;
+    uint32_t s = 1;
+    while ((r = deferred.push(e.frame(s), 0)).status == Pushed::Progress) s++;
+    CHECK(r.status == Pushed::Ready && r.container.empty(), "deferred: reported ready without reassembling");
+    CHECK(deferred.push(e.frame(s + 1), 0).status == Pushed::Ignored, "deferred: no frames taken once ready");
+    auto d = deferred.take(r.id);
+    CHECK(d.has_value() && !deferred.take(r.id), "deferred: taken exactly once");
+    CHECK(d && Receiver::assemble(r.id, *d).container == c, "deferred: reassembles the container");
+  }
+
   // 4 MiB of noise at 1,200 bytes per block, about 3,500 blocks: encode and decode.
   std::mt19937 gen(7);
   Bytes big(MAX_LEN);

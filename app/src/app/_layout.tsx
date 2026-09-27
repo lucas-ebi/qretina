@@ -1,3 +1,4 @@
+import '../lib/polyfills.ts';
 import { router } from 'expo-router';
 import Tabs from 'expo-router/js-tabs';
 import { useIncomingShare } from 'expo-sharing';
@@ -5,7 +6,8 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { BusyProvider } from '../lib/busy.tsx';
 import { AppProvider } from '../lib/state.tsx';
-import { useColors } from '../components/ui.tsx';
+import { engineError } from '../lib/engine.ts';
+import { Label, Screen, useColors } from '../components/ui.tsx';
 
 // Opens the share screen when another app shares a file to QRetina.
 function IncomingShare() {
@@ -16,6 +18,7 @@ function IncomingShare() {
 
 export default function Layout() {
   const c = useColors();
+  if (engineError) return <Screen style={{ justifyContent: 'center' }}><Label>{engineError}</Label></Screen>;
   return (
     <AppProvider>
       <BusyProvider>

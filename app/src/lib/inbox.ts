@@ -1,7 +1,8 @@
 // Turns scanned strings into items: reassembles streams, opens what arrives under the current
 // keys and trust state, and describes it for the library. No React Native imports, so it is tested
 // in Node (test/inbox.test.ts).
-import { Receiver, type Progress } from '@qretina/protocol/fountain.js';
+import type { Progress } from '@qretina/protocol/fountain.js';
+import type { StreamReceiver } from './engine.ts';
 import { openContainer, type Key, type Opened } from '@qretina/protocol/containers.js';
 import { checkVersion, type Trust } from './trust.ts';
 
@@ -43,31 +44,39 @@ export function describe(id: string, container: Uint8Array, keys: Keys, trust: T
 
 export type Event =
   | { kind: 'progress'; progress: Progress }
+  | { kind: 'ready'; progress: Progress } // complete: call finish(id) to reassemble it
   | { kind: 'item'; meta: Meta; opened: Opened; container: Uint8Array }
   | { kind: 'error'; id: string; error: string };
 
 export class Inbox {
-  private rx = new Receiver();
+  private rx: StreamReceiver;
   private keys: () => Keys;
   private trust: () => Trust;
 
-  constructor(keys: () => Keys, trust: () => Trust) {
+  // `rx` is the native receiver in the app (engine.ts); the tests pass the JavaScript one.
+  constructor(keys: () => Keys, trust: () => Trust, rx: StreamReceiver) {
     this.keys = keys;
     this.trust = trust;
+    this.rx = rx;
   }
 
   // Feeds one scanned string; returns what happened, or null for anything that is not a frame
   // (such as the countdown link) or a frame of a stream that is already done.
-  push(raw: string, now = Date.now()): Event | null {
+  push(raw: string): Event | null {
     const r = this.rx.push(raw);
     if (!r) return null;
     if (r.error) return { kind: 'error', id: r.id, error: r.error };
-    if (!r.container) return { kind: 'progress', progress: r };
+    return { kind: r.ready ? 'ready' : 'progress', progress: r };
+  }
+
+  // Reassembles and opens a stream that push() reported ready. For megabytes this takes a while.
+  async finish(id: string, now = Date.now()): Promise<Event> {
+    const r = await this.rx.finish(id);
+    if (r.error || !r.container) return { kind: 'error', id, error: r.error ?? 'corrupt stream' };
     try {
-      return { kind: 'item', container: r.container, ...describe(r.id, r.container, this.keys(), this.trust(), now) };
+      return { kind: 'item', container: r.container, ...describe(id, r.container, this.keys(), this.trust(), now) };
     } catch (e) {
-      this.rx.hold(r.id, 5000); // shown once; a sender still looping it is ignored for a while
-      return { kind: 'error', id: r.id, error: (e as Error).message };
+      return { kind: 'error', id, error: (e as Error).message };
     }
   }
 }

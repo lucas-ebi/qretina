@@ -10,3 +10,7 @@ signing-key.json
 *.key.json
 
 /*.gif
+
+# Native build output
+native/android/build/
+native/android/.cxx/

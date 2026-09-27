@@ -1,11 +1,12 @@
 {
   "name": "qretina",
   "license": "MIT",
-  "repository": "github:lucas-ebi/qr-bootstrap",
+  "repository": "github:lucas-ebi/qretina",
   "private": true,
   "type": "module",
   "workspaces": [
     "protocol",
+    "native",
     "app"
   ],
   "scripts": {
@@ -13,6 +14,7 @@
     "check": "npm test && npm run typecheck -w @qretina/app"
   },
   "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "yaml": "^2.9.1"
   },
   "overrides": {

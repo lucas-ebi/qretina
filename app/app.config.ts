@@ -36,7 +36,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   android: {
     package: 'app.qretina',
-    adaptiveIcon: { foregroundImage: './assets/icon.png', backgroundColor: '#000000' },
+    adaptiveIcon: { foregroundImage: './assets/adaptive-icon.png', backgroundColor: '#F4F7F9' },
     // Only the camera is needed. The app sets its own window's brightness, not the system's; the
     // development server needs the network and overlays, which release builds drop.
     blockedPermissions: [
@@ -53,6 +53,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   plugins: [
     'expo-router',
+    ['expo-splash-screen', {
+      image: './assets/splash.png', imageWidth: 240, resizeMode: 'contain', backgroundColor: '#F4F7F9',
+      dark: { image: './assets/splash-dark.png', backgroundColor: '#0A1E2C' },
+    }],
     ['expo-camera', { cameraPermission: 'QRetina films QR codes on another screen to receive files.', microphonePermission: false, recordAudioAndroid: false, barcodeScannerEnabled: true }],
     // No cameraPermission: false here, which would remove the camera permission for the whole app.
     ['expo-image-picker', { photosPermission: 'QRetina sends photos you choose as QR codes.', microphonePermission: false }],

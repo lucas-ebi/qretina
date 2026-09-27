@@ -8,7 +8,8 @@ import { useKeepAwake } from 'expo-keep-awake';
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
-import { blockFor, encoder, type Encoder } from '@qretina/protocol/fountain.js';
+import { blockFor, type Encoder } from '@qretina/protocol/fountain.js';
+import { engine } from '../lib/engine.ts';
 import { QrCode } from '../components/QrCode.tsx';
 import { Button, Card, Label, kb, useColors } from '../components/ui.tsx';
 import { useBusy } from '../lib/busy.tsx';
@@ -43,7 +44,7 @@ export default function Broadcast() {
     if (!meta) return;
     const enc = await busy(`Preparing ${kb(meta.size)}…`, () => {
       const container = outgoing(loadContainer(meta.id), appKeys, app.keyring[group]?.key);
-      return encoder(container, blockFor(container.length, app.tx.density));
+      return engine.encoder(container, blockFor(container.length, app.tx.density));
     });
     setLive(enc);
   }
@@ -98,7 +99,7 @@ function Choice<T extends number>({ label, value, options, show, onChange }: { l
         {options.map(o => (
           <Pressable key={o} onPress={() => onChange(o)} accessibilityRole="radio" accessibilityState={{ selected: o === value }}
             style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, backgroundColor: o === value ? c.accent : c.card }}>
-            <Text style={{ color: o === value ? '#fff' : c.fg, fontSize: 15 }}>{show(o)}</Text>
+            <Text style={{ color: o === value ? c.onAccent : c.fg, fontSize: 15 }}>{show(o)}</Text>
           </Pressable>
         ))}
       </View>

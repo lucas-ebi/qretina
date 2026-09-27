@@ -27,10 +27,11 @@ export class Decoder {
 }
 
 export type Progress = { id: string; n: number; len: number; rank: number };
-export type Pushed = Progress & { container?: Uint8Array; error?: string };
+export type Pushed = Progress & { container?: Uint8Array; error?: string; ready?: true };
 
 export class Receiver {
-  constructor(options?: { maxStreams?: number });
+  constructor(options?: { maxStreams?: number; deferSolve?: boolean });
   hold(id: string, ms: number): void;
   push(raw: string): Pushed | null;
+  finish(id: string): Pushed | null;
 }

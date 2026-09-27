@@ -1,0 +1,20 @@
+{
+  "name": "@qretina/native",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "description": "The QRetina transfer layer in C++ (core/), bound to React Native with Nitro modules.",
+  "main": "src/index.ts",
+  "react-native": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "codegen": "nitrogen --logLevel=warning"
+  },
+  "peerDependencies": {
+    "react-native": "*",
+    "react-native-nitro-modules": "*"
+  },
+  "devDependencies": {
+    "nitrogen": "^0.37.1"
+  }
+}

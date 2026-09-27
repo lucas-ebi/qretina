@@ -11,7 +11,7 @@ const out = process.argv[2];
 if (!out) throw new Error('usage: build.mjs <output directory>');
 const here = new URL('.', import.meta.url).pathname, wk = join(out, '.well-known');
 mkdirSync(wk, { recursive: true });
-for (const f of ['index.html', 'privacy.html', 'icon.png']) copyFileSync(join(here, f), join(out, f));
+for (const f of ['index.html', 'privacy.html', 'icon.png', 'mark.svg', 'mark-dark.svg', 'favicon.svg']) copyFileSync(join(here, f), join(out, f));
 writeFileSync(join(out, '.nojekyll'), ''); // GitHub Pages would otherwise skip .well-known
 writeFileSync(join(out, 'CNAME'), 'qretina.app\n');
 

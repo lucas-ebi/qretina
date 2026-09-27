@@ -1,19 +1,25 @@
 site_name: QRetina
 site_url: https://docs.qretina.app/
 site_description: Files and signed programs through QR codes, with no network.
-repo_url: https://github.com/lucas-ebi/qr-bootstrap
+repo_url: https://github.com/lucas-ebi/qretina
 edit_uri: edit/main/docs/
 theme:
   name: material
+  logo: assets/logo.svg
+  favicon: assets/favicon.svg
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: green
+      primary: custom
+      accent: custom
       toggle: { icon: material/brightness-4, name: Dark }
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: green
+      primary: custom
+      accent: custom
       toggle: { icon: material/brightness-7, name: Light }
+extra_css:
+  - assets/brand.css
 nav:
   - Overview: index.md
   - Using the app: app.md

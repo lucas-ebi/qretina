@@ -87,3 +87,10 @@ test('b64url keys from the build configuration load', () => {
   const k = rand();
   assert.deepEqual(b64url(toB64url(k)), k);
 });
+
+test('the device self-test passes on the reference platform', async () => {
+  const { checks, speed } = await import('../src/lib/selftest.ts');
+  for (const c of checks()) assert.ok(c.ok, `${c.name}: ${c.detail}`);
+  const s = speed(100_000);
+  assert.ok(s.ok && s.n > 100);
+});

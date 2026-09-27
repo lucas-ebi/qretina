@@ -62,12 +62,38 @@ the phone's clock, has not been revoked, and its namespace begins the program's 
 gh workflow run certify.yml -f action=crl -f number=2 -f revoke=<serial>
 ```
 
-The result is a broadcast of a revocation list. Phones keep the list with the highest number, and
-relay it like any other item. Numbers must increase; each list replaces the previous one, so it must
-repeat all serials still revoked.
+The result is a broadcast of a revocation list (a GIF), and `crl.bin`. Phones keep the list with the
+highest number, and relay it like any other item. Numbers must increase; each list replaces the
+previous one, so it must repeat all serials still revoked.
+
+Commit `crl.bin` as `app/release/crl.bin`: each release then ships it, so new installations know of
+the revocation before any broadcast reaches them.
 
 ## Rotating keys
 
 Add the new root key to `TRUSTED_KEYS` and release the app. Sign with the new key once enough phones
 have updated, and remove the old key in a later release. For app keys, put the new key first in
 `APP_KEYS`: releases open items sealed with any listed key and seal with the first.
+
+## Releasing the app
+
+```
+gh workflow run release.yml -f target=apk                    # a test APK, as a workflow artifact
+gh workflow run release.yml -f target=apk -f publish=true    # the latest GitHub release
+gh workflow run release.yml -f target=stores                 # EAS builds for both stores
+```
+
+A published APK must be signed with your own key. Create a keystore once and keep a backup: an
+app signed with another key cannot update the installed one.
+
+```
+keytool -genkeypair -v -keystore qretina.jks -alias qretina -keyalg RSA -keysize 4096 -validity 36500
+base64 -w0 qretina.jks | gh secret set ANDROID_KEYSTORE --env signing
+gh secret set ANDROID_KEYSTORE_PASSWORD --env signing
+gh secret set ANDROID_KEY_ALIAS --env signing --body qretina
+```
+
+The workflow log prints the certificate's SHA-256 fingerprint. Set it as the `ANDROID_CERT_SHA256`
+variable (and your Apple team id as `APPLE_TEAM_ID`), then run `site.yml`, so that the countdown link
+opens the app directly. Store builds through EAS use keys that EAS holds; add their fingerprint too,
+separated by a comma.

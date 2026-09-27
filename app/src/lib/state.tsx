@@ -1,9 +1,12 @@
 // App state shared by the screens, persisted through store.ts.
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { appKeys, rootKeys } from './config.ts';
+import { MAX_LEN, streamId } from '@qretina/protocol/fountain.js';
+import { packFile } from '@qretina/protocol/containers.js';
+import { appKeys, bundledCrl, rootKeys } from './config.ts';
 import { Inbox, describe, type Keys, type Meta } from './inbox.ts';
+import { outgoing } from './outgoing.ts';
 import * as store from './store.ts';
-import type { Trust } from './trust.ts';
+import { withCrl, type Trust } from './trust.ts';
 
 type State = {
   items: Meta[];
@@ -13,6 +16,7 @@ type State = {
   inbox: Inbox;
   keys: () => Keys;
   add: (meta: Meta, container: Uint8Array) => void;
+  addFile: (name: string, mime: string, bytes: Uint8Array) => string;
   remove: (id: string) => void;
   open: (id: string) => ReturnType<typeof describe>;
   setTrust: (t: Trust) => void;
@@ -30,7 +34,7 @@ export function useApp() {
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<Meta[]>(store.loadIndex);
-  const [trust, setTrustState] = useState<Trust>(store.loadTrust);
+  const [trust, setTrustState] = useState<Trust>(() => (bundledCrl ? withCrl(store.loadTrust(), bundledCrl) : store.loadTrust()));
   const [keyring, setKeyringState] = useState<store.GroupKey[]>([]);
   const [tx, setTxState] = useState<store.TxPrefs>(store.loadTx);
 
@@ -48,6 +52,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     store.saveContainer(meta.id, container);
     setItems(prev => saveItems([meta, ...prev.filter(m => m.id !== meta.id)]));
   }, []);
+
+  // Packs a file for broadcasting, adds it to the library, and returns its id. Throws when it is too
+  // large to send.
+  const addFile = useCallback((name: string, mime: string, bytes: Uint8Array) => {
+    const container = outgoing(packFile(name, mime, bytes), appKeys);
+    if (container.length > MAX_LEN) throw new Error(`${name} is ${(bytes.length / 1048576).toFixed(1)} MB; up to 4 MB (after compression) can be sent.`);
+    const { meta } = describe(streamId(container), container, keys(), ref.current.trust);
+    add(meta, container);
+    return meta.id;
+  }, [add, keys]);
 
   const remove = useCallback((id: string) => {
     store.deleteContainer(id);
@@ -75,6 +89,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     })));
   }, [keys]);
 
-  const value = { items, trust, keyring, tx, inbox, keys, add, remove, open, setTrust, setKeyring, setTx };
+  const value = { items, trust, keyring, tx, inbox, keys, add, addFile, remove, open, setTrust, setKeyring, setTx };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

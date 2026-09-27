@@ -15,7 +15,9 @@ screen, or a download page if QRetina is not installed.
 
 ## Broadcast
 
-Choose an item from the library, or a file or photo, then start. Keep the screen facing the other
+Choose an item from the library, or a file or photo, then start. You can also share a file to
+QRetina from another app, with the system's Share button, and broadcast it from there. Items can be
+up to 4 MB after compression. Keep the screen facing the other
 camera, 20 to 40 cm away. Tap the screen to stop. Settings:
 
 | Setting | Default | Notes |
@@ -31,7 +33,7 @@ relay one item at once, and a receiver combines their codes.
 
 ## Library
 
-Everything received or broadcast. Files can be previewed (images), shared or saved to other apps,
+Everything received or broadcast. Files can be previewed (images, audio and video), shared or saved to other apps,
 broadcast again, or deleted. Programs can be run. An item marked *Locked* was sealed with a group
 key this phone does not hold: it can still be relayed, and opens as soon as its key is added.
 
@@ -46,5 +48,12 @@ can be turned off in Settings.
 
 A private broadcast can be opened only by phones that hold its group key. Add keys in Settings
 beforehand, from a passphrase agreed in person or from a key file (made with
-`qretina.mjs key`). A passphrase must be long, several words: a recording of a broadcast lets anyone
+`qretina.mjs key`). A key file can also be shared to QRetina from another app, such as a messenger
+or a file manager, which offers to add it. A passphrase must be long, several words: a recording of a broadcast lets anyone
 try guesses at leisure.
+
+## Diagnostics
+
+Settings → Diagnostics checks the protocol against the specification's test vectors on the phone
+itself, and times packing and receiving 1 MB and 4 MB. If transfers fail between two phones, run
+it on both.

@@ -1,7 +1,8 @@
 name: Certify publisher
 
 # Uses the root key (the SIGNING_KEY secret of the `signing` environment) to issue a publisher
-# certificate, or a revocation list as a looping GIF. Run it from Actions, or:
+# certificate, or a revocation list: a looping GIF to broadcast, and crl.bin to commit as
+# app/release/crl.bin so that the next release ships it. Run it from Actions, or:
 #   gh workflow run certify.yml -f action=cert -f pub=<publisher public key> -f name="Relief Org" -f ns=org.relief.
 #   gh workflow run certify.yml -f action=crl -f number=2 -f revoke=5,9
 # then fetch the result with:  gh run download <run-id>
@@ -62,6 +63,8 @@ jobs:
           else
             node tools/qretina.mjs crl --number "$NUMBER" ${REVOKE:+--revoke "$REVOKE"} \
               --gif "$RUNNER_TEMP/out/crl-$NUMBER.gif"
+            node tools/qretina.mjs crl --number "$NUMBER" ${REVOKE:+--revoke "$REVOKE"} \
+              --out "$RUNNER_TEMP/out/crl.bin"
           fi
         env:
           QRETINA_SIGNING_KEY: ${{ secrets.SIGNING_KEY }}

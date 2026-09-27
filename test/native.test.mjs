@@ -4,13 +4,17 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { vectors } from '../tools/vectors.mjs';
+import { appVectors, vectors } from '../tools/vectors.mjs';
 
 const root = new URL('..', import.meta.url).pathname;
 const file = join(root, 'test/vectors/streams.txt');
 
 test('test/vectors/streams.txt is what the reference implementation produces', () => {
   assert.equal(readFileSync(file, 'utf8'), vectors(), 'run: node tools/vectors.mjs');
+});
+
+test('app/src/lib/vectors.json holds the current spec vectors', () => {
+  assert.equal(readFileSync(join(root, 'app/src/lib/vectors.json'), 'utf8'), appVectors(), 'run: node tools/vectors.mjs');
 });
 
 const cxx = ['c++', 'g++', 'clang++'].find(c => spawnSync(c, ['--version']).status === 0);

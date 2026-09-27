@@ -6,14 +6,13 @@ import { File } from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 import { useKeepAwake } from 'expo-keep-awake';
 import { useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
-import { blockFor, encoder, streamId } from '@qretina/protocol/fountain.js';
-import { packFile } from '@qretina/protocol/containers.js';
+import { useEffect, useState } from 'react';
+import { Alert, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import { blockFor, encoder, type Encoder } from '@qretina/protocol/fountain.js';
 import { QrCode } from '../components/QrCode.tsx';
-import { Button, Card, Label, Screen, kb, useColors } from '../components/ui.tsx';
+import { Button, Card, Label, kb, useColors } from '../components/ui.tsx';
+import { useBusy } from '../lib/busy.tsx';
 import { LINK, appKeys } from '../lib/config.ts';
-import { describe } from '../lib/inbox.ts';
 import { outgoing } from '../lib/outgoing.ts';
 import { useApp } from '../lib/state.tsx';
 import { loadContainer, type TxPrefs } from '../lib/store.ts';
@@ -25,33 +24,45 @@ export default function Broadcast() {
   const params = useLocalSearchParams<{ id?: string }>();
   const [id, setId] = useState<string | undefined>(params.id);
   const [group, setGroup] = useState<number>(-1); // index in the keyring, or -1 for public
-  const [live, setLive] = useState(false);
-  useEffect(() => { if (params.id) { setId(params.id); setLive(false); } }, [params.id]);
+  const [live, setLive] = useState<Encoder | null>(null);
+  const busy = useBusy();
+  useEffect(() => { if (params.id) { setId(params.id); setLive(null); } }, [params.id]);
 
   const meta = app.items.find(m => m.id === id);
 
-  async function add(name: string, mime: string, bytes: Uint8Array) {
-    const container = outgoing(packFile(name, mime, bytes), appKeys);
-    const { meta: m } = describe(streamId(container), container, app.keys(), app.trust);
-    app.add(m, container);
-    setId(m.id);
+  async function add(name: string, mime: string, read: () => Promise<Uint8Array>) {
+    try {
+      const bytes = await read();
+      setId(await busy(`Preparing ${name} (${kb(bytes.length)})…`, () => app.addFile(name, mime, bytes)));
+    } catch (e) {
+      Alert.alert('Cannot send this file', (e as Error).message);
+    }
+  }
+
+  async function start() {
+    if (!meta) return;
+    const enc = await busy(`Preparing ${kb(meta.size)}…`, () => {
+      const container = outgoing(loadContainer(meta.id), appKeys, app.keyring[group]?.key);
+      return encoder(container, blockFor(container.length, app.tx.density));
+    });
+    setLive(enc);
   }
 
   async function pickFile() {
     const r = await File.pickFileAsync();
     if (r.canceled) return;
     const f = r.result;
-    await add(f.name, f.type || 'application/octet-stream', await f.bytes());
+    await add(f.name, f.type || 'application/octet-stream', () => f.bytes());
   }
 
   async function pickPhoto() {
     const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images', 'videos'], quality: 1 });
     if (r.canceled) return;
     const a = r.assets[0];
-    await add(a.fileName ?? 'photo.jpg', a.mimeType ?? 'image/jpeg', await new File(a.uri).bytes());
+    await add(a.fileName ?? 'photo.jpg', a.mimeType ?? 'image/jpeg', () => new File(a.uri).bytes());
   }
 
-  if (live && meta) return <Live id={meta.id} group={app.keyring[group]?.key} prefs={app.tx} onStop={() => setLive(false)} />;
+  if (live) return <Live enc={live} prefs={app.tx} onStop={() => setLive(null)} />;
 
   const set = (p: Partial<TxPrefs>) => app.setTx({ ...app.tx, ...p });
   return (
@@ -73,7 +84,7 @@ export default function Broadcast() {
       <Label dim size={14}>
         700 bytes at 15 codes per second suits one phone filming another. Larger codes, or two at once, need a bigger or closer screen.
       </Label>
-      <Button kind="primary" title="Start broadcasting" disabled={!meta || meta.kind === 'locked' && group >= 0} onPress={() => setLive(true)} />
+      <Button kind="primary" title="Start broadcasting" disabled={!meta || meta.kind === 'locked' && group >= 0} onPress={start} />
     </ScrollView>
   );
 }
@@ -95,13 +106,9 @@ function Choice<T extends number>({ label, value, options, show, onChange }: { l
   );
 }
 
-function Live({ id, group, prefs, onStop }: { id: string; group?: Uint8Array; prefs: TxPrefs; onStop: () => void }) {
+function Live({ enc, prefs, onStop }: { enc: Encoder; prefs: TxPrefs; onStop: () => void }) {
   useKeepAwake();
   const { width, height } = useWindowDimensions();
-  const enc = useMemo(() => {
-    const container = outgoing(loadContainer(id), appKeys, group);
-    return encoder(container, blockFor(container.length, prefs.density));
-  }, [id, group, prefs.density]);
   const [tick, setTick] = useState(0);
   const [start] = useState(() => getRandomValues(new Uint32Array(1))[0] >>> 1);
 

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-// Writes test/vectors/streams.txt: streams produced by the reference implementation, for other
-// implementations (native/core) to reproduce frame by frame and to decode. Deterministic, so the
-// file can be checked for being current (test/native.test.mjs). One record per line:
+// Writes the test vectors other implementations check themselves against, deterministically, so
+// test/native.test.mjs can check the files are current:
+//   app/src/lib/vectors.json  the vectors of spec/qretina.yaml, for the app's self-test on devices
+//   test/vectors/streams.txt  streams from the reference implementation, for native/core, one record per line:
 //   case <name> <block>        a new stream
 //   container <hex>            its container
 //   frame <seed> <text>        a frame the encoder must produce exactly
@@ -9,7 +10,8 @@
 //   mask <seed> <n> <bits>     a mask
 //   sha256 <hex in> <hex out>  a digest
 //   reject <text>              a frame that must be rejected
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { parse } from 'yaml';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { PROTOCOL, encoder, hex, mask, mulberry32 } from '../protocol/fountain.js';
 
@@ -42,7 +44,11 @@ export function vectors() {
   return out.join('\n') + '\n';
 }
 
+export const appVectors = () =>
+  JSON.stringify({ protocol: PROTOCOL, ...parse(readFileSync(new URL('../spec/qretina.yaml', import.meta.url), 'utf8')).vectors }, null, 2) + '\n';
+
 if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href) {
   writeFileSync(new URL('../test/vectors/streams.txt', import.meta.url), vectors());
-  console.error('wrote test/vectors/streams.txt');
+  writeFileSync(new URL('../app/src/lib/vectors.json', import.meta.url), appVectors());
+  console.error('wrote test/vectors/streams.txt and app/src/lib/vectors.json');
 }

@@ -5,11 +5,16 @@
 //                 sent is sealed with the first, and any of them opens what is received.
 //   QRETINA_RELEASE set to 1 for store builds: the keys become mandatory and Android loses the
 //                 INTERNET permission, which only the development server needs.
+// The newest revocation list, when release/crl.bin exists (from certify.yml), ships with the app,
+// so phones know of revocations before any reaches them over the air.
+import { existsSync, readFileSync } from 'node:fs';
 import type { ConfigContext, ExpoConfig } from 'expo/config';
 
 const list = (v?: string) => (v ?? '').split(/[\s,]+/).filter(Boolean);
 const release = process.env.QRETINA_RELEASE === '1' || process.env.EAS_BUILD_PROFILE === 'production';
 const rootKeys = list(process.env.TRUSTED_KEYS), appKeys = list(process.env.APP_KEYS);
+const crlFile = new URL('./release/crl.bin', import.meta.url);
+const crl = existsSync(crlFile) ? readFileSync(crlFile).toString('base64url') : undefined;
 
 if (release && !(rootKeys.length && appKeys.length)) throw new Error('release builds need TRUSTED_KEYS and APP_KEYS');
 for (const k of rootKeys) if (!/^[A-Za-z0-9_-]{43}$/.test(k)) throw new Error(`TRUSTED_KEYS: not an Ed25519 public key: ${k}`);
@@ -36,6 +41,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     // development server needs the network and overlays, which release builds drop.
     blockedPermissions: [
       'android.permission.WRITE_SETTINGS', 'android.permission.VIBRATE', 'android.permission.WRITE_EXTERNAL_STORAGE',
+      'android.permission.FOREGROUND_SERVICE', 'android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK', // previews play in the foreground only
       ...(release ? ['android.permission.INTERNET', 'android.permission.SYSTEM_ALERT_WINDOW'] : []),
     ],
     intentFilters: [{
@@ -50,8 +56,14 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ['expo-camera', { cameraPermission: 'QRetina films QR codes on another screen to receive files.', microphonePermission: false, recordAudioAndroid: false, barcodeScannerEnabled: true }],
     // No cameraPermission: false here, which would remove the camera permission for the whole app.
     ['expo-image-picker', { photosPermission: 'QRetina sends photos you choose as QR codes.', microphonePermission: false }],
+    ['expo-audio', { microphonePermission: false, recordAudioAndroid: false, enableBackgroundPlayback: false }],
+    'expo-video',
     'expo-secure-store',
-    'expo-sharing',
+    // Other apps can share a file to QRetina, to broadcast it, or a key file, to add it.
+    ['expo-sharing', {
+      ios: { enabled: true, activationRule: { supportsFileWithMaxCount: 1, supportsImageWithMaxCount: 1, supportsMovieWithMaxCount: 1 } },
+      android: { enabled: true, singleShareMimeTypes: ['*/*'] },
+    }],
   ],
-  extra: { rootKeys, appKeys },
+  extra: { rootKeys, appKeys, crl },
 });

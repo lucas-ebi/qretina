@@ -1,5 +1,6 @@
 // Settings: running programs, trusted keys, revocation list, and the group keys for private items.
 import { File } from 'expo-file-system';
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { Alert, ScrollView, Switch, TextInput, View } from 'react-native';
 import { b64url, keyFromPassphrase, keyId } from '@qretina/protocol/containers.js';
@@ -13,6 +14,8 @@ export default function Settings() {
   const [label, setLabel] = useState('');
   const [passphrase, setPassphrase] = useState('');
   const [busy, setBusy] = useState(false);
+  // Who signed the programs in the library: certified publishers by name, others as QRetina.
+  const publishers = [...new Set(app.items.flatMap(m => (m.code ? [`${m.code.publisher ?? 'QRetina'} (key ${m.code.signer})`] : [])))];
   const input = { color: c.fg, backgroundColor: c.card, borderRadius: 8, padding: 10, fontSize: 16 };
 
   async function addKey(key: Uint8Array, name: string) {
@@ -71,8 +74,16 @@ export default function Settings() {
         <Label dim size={14}>App keys: {appKeys.length || 'none (development build: broadcasts are not sealed)'}</Label>
         <Label dim size={14}>Revocation list: {app.trust.crl.number ? `number ${app.trust.crl.number}, ${app.trust.crl.serials.length} revoked` : 'none received'}</Label>
         <Label dim size={14}>Approved programs: {app.trust.approved.length}</Label>
+        {publishers.length > 0 && <Label dim size={14}>Publishers seen: {publishers.join(', ')}</Label>}
         <Button title="Forget approvals and versions" onPress={() => app.setTrust(resetApprovals(app.trust))} />
       </Card>
+
+      <Card>
+        <Label bold>Privacy</Label>
+        <Label dim size={14}>QRetina collects nothing and makes no network connections. The camera is used only to read QR codes; no images are kept. Received items stay on this phone until you delete them or share them yourself. Group keys are kept in the phone's secure storage.</Label>
+      </Card>
+
+      <Button title="Diagnostics" onPress={() => router.push('/diagnostics')} />
     </ScrollView>
   );
 }

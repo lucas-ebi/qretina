@@ -3,6 +3,7 @@ import * as Sharing from 'expo-sharing';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo } from 'react';
 import { Alert, Image, ScrollView } from 'react-native';
+import { AudioPreview, VideoPreview } from '../../components/Media.tsx';
 import { Button, Card, Label, kb, useColors } from '../../components/ui.tsx';
 import { useApp } from '../../lib/state.tsx';
 import { exportFile } from '../../lib/store.ts';
@@ -36,6 +37,8 @@ export default function Item() {
       {file && shared && IMAGE.test(file.mime) && (
         <Image source={{ uri: shared.uri }} style={{ width: '100%', aspectRatio: 1 }} resizeMode="contain" />
       )}
+      {file && shared && file.mime.startsWith('video/') && <VideoPreview uri={shared.uri} />}
+      {file && shared && file.mime.startsWith('audio/') && <AudioPreview uri={shared.uri} />}
       {code?.type === 'json' && <Card><Label size={13}>{new TextDecoder().decode(code.payload).slice(0, 4000)}</Label></Card>}
       {code?.type === 'html' && app.trust.runPrograms && (
         <Button kind="primary" title="Run" onPress={() => { app.setTrust(approve(app.trust, code)); router.push(`/run/${meta.id}`); }} />

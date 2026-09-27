@@ -2,21 +2,26 @@
 // ResQR command line: keys, signing, and frames or looping GIFs for broadcasting from a computer.
 //
 //   node tools/resqr.mjs keygen [signing-key.json | -]
-//   node tools/resqr.mjs sign <file> --id <name> [--type html|json] [--version N] [--key signing-key.json] [output]
+//   node tools/resqr.mjs sign <file> --id <name> [--type html|json] [--version N] [--cert pub.cert] [key] [output]
 //   node tools/resqr.mjs file <file> [--name N] [--mime M] [output]
+//   node tools/resqr.mjs cert --pub <public key> --name <publisher> --ns <id prefix> [--days 365] [--serial N] [key] --out pub.cert
+//   node tools/resqr.mjs crl --number N [--revoke serial,serial...] [key] [output]
 //
-//   output: [--block 700] [--frames N]
+//   key:    [--key signing-key.json]
+//   output: [--out container.bin] [--block 700] [--frames N]
 //           [--gif out.gif [--scale 8] [--fps 10] [--ecc L] [--intro 3] [--link HTTPS://RESQR.APP/SCAN]]
 //
 // `keygen -` prints the private key to stdout (to pipe into `gh secret set`) and the public key to
-// stderr. `sign` reads the private key from --key, else RESQR_SIGNING_KEY (used by CI), else
-// ./signing-key.json. Without --gif, frames are printed one per line. A GIF loops forever; each loop
-// starts with --intro seconds (0 to 9) of countdown QR codes of --link, which open the app.
+// stderr. Signing commands read the private key from --key, else RESQR_SIGNING_KEY (used by CI),
+// else ./signing-key.json. `cert` and `crl` need a root key (one listed in TRUSTED_KEYS); `sign`
+// takes a root key, or a publisher key with --cert. --out writes the container itself; otherwise
+// frames are printed one per line, or with --gif written as a GIF that loops forever, each loop
+// starting with --intro seconds (0 to 9) of countdown QR codes of --link, which open the app.
 import { readFile, writeFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { ed25519 } from '@noble/curves/ed25519.js';
-import { b64url, packFile, signCode, toB64url } from '../protocol/containers.js';
+import { b64url, issueCert, issueCrl, packFile, signCode, toB64url } from '../protocol/containers.js';
 import { blockFor, encoder } from '../protocol/fountain.js';
 import { encodeGif, renderFrames, renderIntro } from '../protocol/gif.js';
 
@@ -39,6 +44,11 @@ export function keygen() {
 
 export const sign = (jwk, opts) => signCode(b64url(jwk.d), opts);
 
+async function readKey(opt) {
+  const fromEnv = !opt.key && process.env.RESQR_SIGNING_KEY;
+  return JSON.parse(fromEnv || await readFile(opt.key ?? 'signing-key.json', 'utf8'));
+}
+
 // Symbols for seeds start .. start+count-1 (default: enough for a looping GIF). Any n + 2 or so
 // distinct ones decode.
 export function makeFrames(container, { block = 700, count, start = 1 } = {}) {
@@ -58,6 +68,10 @@ export function makeGif(frames, { link = LINK, intro = 3, scale = 8, fps = 10, e
 async function output(container, opt) {
   if (opt.intro !== undefined && !/^[0-9]$/.test(opt.intro)) throw new Error('--intro must be a whole number of seconds from 0 to 9');
   if (opt.link !== undefined && !/^[a-z][a-z0-9+.-]*:\S+$/i.test(opt.link)) throw new Error('--link must be a URL');
+  if (opt.out) {
+    await writeFile(opt.out, container);
+    return console.error(`${opt.out}: ${container.length} B`);
+  }
   const { id, n, b, len, frames } = makeFrames(container, { block: +opt.block || undefined, count: +opt.frames || undefined });
   console.error(`stream ${id}: ${len} B, ${n} blocks x ${b} B, ${frames.length} frames`);
   if (!opt.gif) return console.log(frames.join('\n'));
@@ -82,19 +96,31 @@ async function main([cmd, ...argv]) {
     }
     console.error(`Public key (add it to the TRUSTED_KEYS variable):\n  ${publicKey}`);
   } else if (cmd === 'sign' && pos[0] && opt.id) {
-    const fromEnv = !opt.key && process.env.RESQR_SIGNING_KEY;
-    const jwk = JSON.parse(fromEnv || await readFile(opt.key ?? 'signing-key.json', 'utf8'));
-    const type = opt.type ?? pos[0].split('.').pop();
+    const jwk = await readKey(opt), type = opt.type ?? pos[0].split('.').pop();
     const version = opt.version === undefined ? undefined : +opt.version;
-    await output(sign(jwk, { type, id: opt.id, payload: await readFile(pos[0]), version }), opt);
+    const cert = opt.cert ? new Uint8Array(await readFile(opt.cert)) : undefined;
+    await output(sign(jwk, { type, id: opt.id, payload: await readFile(pos[0]), version, cert }), opt);
+  } else if (cmd === 'cert' && opt.pub && opt.name && opt.ns && opt.out) {
+    const days = opt.days === undefined ? 365 : +opt.days, now = Math.floor(Date.now() / 1000);
+    if (!(days > 0 && days <= 3650)) throw new Error('--days must be from 1 to 3650');
+    const serial = opt.serial === undefined ? undefined : +opt.serial;
+    const cert = issueCert(b64url((await readKey(opt)).d), { publicKey: opt.pub, name: opt.name, namespace: opt.ns, notBefore: now, notAfter: now + Math.round(days * 86400), serial });
+    await writeFile(opt.out, cert);
+    console.error(`${opt.out}: ${opt.name} may publish ids beginning with ${opt.ns} for ${days} days`);
+  } else if (cmd === 'crl' && opt.number) {
+    const serials = opt.revoke ? opt.revoke.split(',').map(Number) : [];
+    await output(issueCrl(b64url((await readKey(opt)).d), { number: +opt.number, serials }), opt);
   } else if (cmd === 'file' && pos[0]) {
     const name = opt.name ?? basename(pos[0]);
     await output(packFile(name, opt.mime ?? mimeOf(name), await readFile(pos[0])), opt);
   } else {
     console.error('usage: resqr.mjs keygen [file | -]\n' +
-      '       resqr.mjs sign <file> --id <name> [--type html|json] [--version N] [--key f] [output]\n' +
+      '       resqr.mjs sign <file> --id <name> [--type html|json] [--version N] [--cert pub.cert] [key] [output]\n' +
       '       resqr.mjs file <file> [--name N] [--mime M] [output]\n' +
-      'output: [--block B] [--frames N] [--gif out.gif [--scale S] [--fps F] [--ecc L|M|Q|H] [--intro 0-9] [--link URL]]');
+      '       resqr.mjs cert --pub <public key> --name <publisher> --ns <id prefix> [--days 365] [--serial N] [key] --out pub.cert\n' +
+      '       resqr.mjs crl --number N [--revoke serial,serial...] [key] [output]\n' +
+      'key:    [--key signing-key.json]\n' +
+      'output: [--out file] [--block B] [--frames N] [--gif out.gif [--scale S] [--fps F] [--ecc L|M|Q|H] [--intro 0-9] [--link URL]]');
     process.exit(1);
   }
 }

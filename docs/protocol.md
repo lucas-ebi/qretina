@@ -8,7 +8,7 @@ This page explains them. The key words MUST, MUST NOT, SHOULD and MAY are used a
 The protocol identifier is `RQR` followed by the first six hexadecimal digits, in upper case, of
 SHA-256 over the canonical JSON (RFC 8785) of `parameters`. Any change to the parameters gives a new
 identifier, and a receiver ignores frames that carry another one instead of misreading them. The
-current identifier is `RQRF6943C`.
+current identifier is `RQR64B3DF`.
 
 ## Overview
 
@@ -57,11 +57,24 @@ The cost is O(n²·b/32) word operations per stream, spread over the reception.
 The first byte of a container is its tag.
 
 **Code (tag 1).** A program (`html`) or data (`json`), compressed and signed with Ed25519. The
-signature covers the domain prefix `resqr code\0` followed by the compressed part, and MUST verify
-under a trusted key before the body is decompressed. A receiver MUST NOT run a container whose
-version is lower than the highest it has accepted for the same id, and SHOULD ask the user before
-running an id or signer it has not seen before. HTML programs MUST run in a sandbox without network
-access or access to the receiver's storage.
+signature covers the domain prefix `resqr code\0` and everything after the signature. It is made
+either by a *root key*, which the receiver holds, or by a *publisher key*, in which case the
+container embeds the publisher's certificate. The signature MUST verify before the body is
+decompressed. A receiver MUST NOT run a container whose version is lower than the highest it has
+accepted for the same id, and SHOULD ask the user before running an id or signer it has not seen
+before. HTML programs MUST run in a sandbox without network access or access to the receiver's
+storage. Since the certificate travels inside the container, any receiver can relay a program to
+others, who can verify it in the same way.
+
+**Certificate (tag 4).** A root key certifies a publisher's key under a name, for ids that begin
+with a namespace (such as `org.relief.`), between two times. A receiver MUST refuse code under a
+certificate whose validity does not include the receiver's clock, whose serial is revoked, or whose
+namespace does not prefix the id. Receivers may have wrong clocks, so validity periods should be
+long, with revocation as the means of withdrawal.
+
+**Revocation list (tag 5).** A root key lists the serials of revoked certificates under an
+increasing number. A receiver keeps the list with the highest number it has received. Lists travel
+like any other container, and releases of the app include the latest one.
 
 **File (tags 2 and 3).** Arbitrary data with a media type and a name, compressed when that makes it
 smaller. Files carry no signature and MUST NOT be run or rendered as active content, whatever their

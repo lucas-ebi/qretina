@@ -1,15 +1,12 @@
-// Containers (spec/resqr.yaml `containers`): signed code and plain files. Pure JS.
-//   code:        0x01 || Ed25519 signature (64) || deflate-raw("<type> <id> <version>\n" payload),
-//                signed over DOMAIN || the deflated part.
-//   file:        0x02 || deflate-raw(meta),   file-stored: 0x03 || meta,
-//                where meta = "<mime> <percent-encoded name>\n" bytes.
-// Files are data: they are never run, whatever their type.
+// Containers (spec/resqr.yaml `containers`): signed code, files, certificates and revocation lists.
+// Pure JS. Code runs only when signed by a root key, or by a publisher whose certificate a root
+// key issued; files are data and are never run, whatever their type.
 import { ed25519 } from '@noble/curves/ed25519.js';
 import { deflateSync, inflateSync, strFromU8, strToU8 } from 'fflate';
 
-export const CODE = 1, FILE = 2, FILE_STORED = 3;
+export const CODE = 1, FILE = 2, FILE_STORED = 3, CERT = 4, CRL = 5;
 export const TYPES = ['html', 'json'];
-export const DOMAIN = strToU8('resqr code\0');
+export const DOMAIN = strToU8('resqr code\0'), CERT_DOMAIN = strToU8('resqr cert\0'), CRL_DOMAIN = strToU8('resqr crl\0');
 const ID = /^[A-Za-z0-9_.-]{1,64}$/;
 
 export const concat = (...parts) => {
@@ -52,34 +49,101 @@ const line = raw => {
   return [strFromU8(raw.subarray(0, nl)).split(' '), raw.subarray(nl + 1)];
 };
 
-// ---- Code -------------------------------------------------------------------
+// ---- Keys ---------------------------------------------------------------------
 
-// A trusted public key (base64url) with a short fingerprint, its first 8 characters, to show people.
+// A public key (base64url) with a short fingerprint, its first 8 characters, to show people.
 export function loadKey(b64) {
   const key = b64url(b64);
   if (key.length !== 32) throw new Error('an Ed25519 public key is 32 bytes');
   return { fp: b64.slice(0, 8), key };
 }
 
-// Signs a program with a 32-byte Ed25519 secret key. The version defaults to the current Unix
-// time, so later signatures are always newer.
-export function signCode(secretKey, { type, id, payload, version = Math.floor(Date.now() / 1000) }) {
+const keyOf = bytes => ({ fp: toB64url(bytes).slice(0, 8), key: bytes });
+
+// Everything after the signature is signed, prefixed with the container type's domain.
+const signed = (tag, domain, secretKey, rest) => concat([tag], ed25519.sign(concat(domain, rest), secretKey), rest);
+
+function verify(container, tag, domain, keys) {
+  if (container[0] !== tag || container.length < 66) throw new Error('malformed container');
+  const sig = container.subarray(1, 65), rest = container.subarray(65), msg = concat(domain, rest);
+  const signer = keys.find(k => { try { return ed25519.verify(sig, msg, k.key); } catch { return false; } });
+  if (!signer) throw new Error(keys.length ? 'bad signature' : 'no trusted key');
+  return [signer, rest];
+}
+
+const uint = (s, what) => {
+  if (!/^\d{1,15}$/.test(s ?? '')) throw new Error(`malformed ${what}`);
+  return +s;
+};
+
+// ---- Certificates and revocation lists -------------------------------------------
+
+// A root key certifies a publisher's key for ids that begin with `namespace`, between two times.
+export function issueCert(rootSecret, { publicKey, name, namespace, notBefore, notAfter, serial = Date.now() }) {
+  if (!ID.test(namespace)) throw new Error('namespace is 1 to 64 letters, digits, _ . -');
+  if (!name) throw new Error('a certificate needs a name');
+  for (const v of [serial, notBefore, notAfter]) uint(String(v), 'certificate');
+  if (notAfter < notBefore) throw new Error('the certificate ends before it starts');
+  const key = typeof publicKey === 'string' ? b64url(publicKey) : publicKey;
+  if (key.length !== 32) throw new Error('an Ed25519 public key is 32 bytes');
+  const header = `${serial} ${notBefore} ${notAfter} ${namespace} ${encodeURIComponent(name)}\n`;
+  return signed(CERT, CERT_DOMAIN, rootSecret, concat(strToU8(header), key));
+}
+
+export function openCert(container, roots) {
+  const [root, rest] = verify(container, CERT, CERT_DOMAIN, roots);
+  const [f, key] = line(rest);
+  if (f.length !== 5 || key.length !== 32 || !ID.test(f[3])) throw new Error('malformed certificate');
+  const [serial, notBefore, notAfter] = f.slice(0, 3).map(v => uint(v, 'certificate'));
+  return { serial, notBefore, notAfter, namespace: f[3], name: decodeURIComponent(f[4]), ...keyOf(key), root: root.fp };
+}
+
+export function issueCrl(rootSecret, { number, serials = [] }) {
+  for (const v of [number, ...serials]) uint(String(v), 'revocation list');
+  return signed(CRL, CRL_DOMAIN, rootSecret, strToU8(`${number}\n${serials.join(' ')}`));
+}
+
+export function openCrl(container, roots) {
+  const [, rest] = verify(container, CRL, CRL_DOMAIN, roots);
+  const [[number], list] = line(rest);
+  const text = strFromU8(list);
+  return { number: uint(number, 'revocation list'), serials: text ? text.split(' ').map(v => uint(v, 'revocation list')) : [] };
+}
+
+// ---- Code -------------------------------------------------------------------------
+
+// Signs a program with a 32-byte Ed25519 secret key: a root key, or a publisher key together with
+// the certificate a root issued for it. The version defaults to the current Unix time, so later
+// signatures are always newer.
+export function signCode(secretKey, { type, id, payload, version = Math.floor(Date.now() / 1000), cert = new Uint8Array(0) }) {
   if (!TYPES.includes(type)) throw new Error(`type must be one of ${TYPES.join(', ')}`);
   if (!ID.test(id)) throw new Error('id is 1 to 64 letters, digits, _ . -');
   if (!Number.isSafeInteger(version) || version < 0 || version > 999999999999999) throw new Error('version must be a non-negative integer');
+  if (cert.length > 0xFFFF) throw new Error('certificate too long');
   const body = deflate(concat(strToU8(`${type} ${id} ${version}\n`), payload));
-  return concat([CODE], ed25519.sign(concat(DOMAIN, body), secretKey), body);
+  return signed(CODE, DOMAIN, secretKey, concat([cert.length >> 8, cert.length & 255], cert, body));
 }
 
-// Verifies a code container against any trusted key, then decompresses. Throws on failure.
-export function openCode(container, keys) {
-  if (container[0] !== CODE) throw new Error('not a code container');
-  const sig = container.subarray(1, 65), body = container.subarray(65), msg = concat(DOMAIN, body);
-  const signer = keys.find(k => { try { return ed25519.verify(sig, msg, k.key); } catch { return false; } });
-  if (!signer) throw new Error(keys.length ? 'bad signature' : 'no trusted key');
-  const [[type, id, v, ...rest], payload] = line(inflate(body));
-  if (!TYPES.includes(type) || !ID.test(id ?? '') || !/^\d{1,15}$/.test(v ?? '') || rest.length) throw new Error('malformed container');
-  return { type, id, version: +v, payload, signer: signer.fp };
+// Verifies a code container, then decompresses it. `roots` are the trusted root keys, `revoked` the
+// serials of the newest revocation list, `now` the time in Unix seconds. Throws on failure.
+// The result's `signer` is the fingerprint of the key that signed; `publisher` is set when that key
+// holds a certificate.
+export function openCode(container, { roots = [], revoked = [], now = Date.now() / 1000 } = {}) {
+  if (container[0] !== CODE || container.length < 67) throw new Error(container[0] === CODE ? 'malformed container' : 'not a code container');
+  const certLen = (container[65] << 8) | container[66], certBytes = container.subarray(67, 67 + certLen);
+  if (certBytes.length !== certLen) throw new Error('malformed container');
+  let keys = roots, publisher;
+  if (certLen) {
+    publisher = openCert(certBytes, roots);
+    if (now < publisher.notBefore || now > publisher.notAfter) throw new Error('certificate not valid at this time');
+    if ([...revoked].includes(publisher.serial)) throw new Error('certificate revoked');
+    keys = [publisher];
+  }
+  const [signer] = verify(container, CODE, DOMAIN, keys);
+  const [[type, id, v, ...more], payload] = line(inflate(container.subarray(67 + certLen)));
+  if (!TYPES.includes(type) || !ID.test(id ?? '') || more.length) throw new Error('malformed container');
+  if (publisher && !id.startsWith(publisher.namespace)) throw new Error(`${publisher.name} may not publish ${id}`);
+  return { type, id, version: uint(v, 'container'), payload, signer: signer.fp, publisher };
 }
 
 // ---- Files ------------------------------------------------------------------
@@ -99,12 +163,18 @@ export function openFile(container) {
 
 // ---- Any container ------------------------------------------------------------
 
-// Returns { code } (verified, and accepted by `accept`, which may throw to refuse it) or { file }.
-// Throws on anything else.
-export function openContainer(container, { keys = [], accept } = {}) {
-  if (container[0] === FILE || container[0] === FILE_STORED) return { file: openFile(container) };
-  if (container[0] !== CODE) throw new Error('unknown container type');
-  const code = openCode(container, keys);
-  accept?.(code);
-  return { code };
+// Opens any container. Returns { code } (verified, then accepted by `accept`, which may throw to
+// refuse it), { file }, { cert } or { crl }; throws on anything else. Options as for openCode.
+export function openContainer(container, { accept, ...trust } = {}) {
+  switch (container[0]) {
+    case FILE: case FILE_STORED: return { file: openFile(container) };
+    case CERT: return { cert: openCert(container, trust.roots ?? []) };
+    case CRL: return { crl: openCrl(container, trust.roots ?? []) };
+    case CODE: {
+      const code = openCode(container, trust);
+      accept?.(code);
+      return { code };
+    }
+    default: throw new Error('unknown container type');
+  }
 }

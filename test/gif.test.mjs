@@ -54,7 +54,7 @@ test('a signed stream survives the trip through the GIF: frames scan, verify and
   assert.deepEqual(scanned.slice(3), frames, 'data frames scan back to exactly what the encoder produced');
 
   // The link frames are ignored, and a third of the rest is lost.
-  const r = receive(scanned.filter((_, i) => i % 3 !== 1), { keys: [loadKey(publicKey)] });
+  const r = receive(scanned.filter((_, i) => i % 3 !== 1), { roots: [loadKey(publicKey)] });
   assert.ok(r?.code, JSON.stringify(r));
   assert.deepEqual([r.code.id, r.code.version, dec(r.code.payload)], ['demo', 5, source]);
 });

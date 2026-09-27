@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { PROTOCOL } from '../protocol/fountain.js';
 import { loadKey } from '../protocol/containers.js';
-import { LINK } from '../tools/resqr.mjs';
+import { LINK, makeFrames } from '../tools/resqr.mjs';
 import { parseGif, readQr } from './helpers/gif.mjs';
 import { receive } from './helpers/stream.mjs';
 
@@ -16,6 +16,7 @@ const cli = new URL('../tools/resqr.mjs', import.meta.url).pathname;
 const snake = new URL('../examples/snake.html', import.meta.url).pathname;
 const node = (args, env = {}, cwd) => run(process.execPath, [cli, ...args], { env: { ...process.env, ...env }, cwd });
 const tmp = () => mkdtemp(join(tmpdir(), 'resqr-cli-'));
+const makeFramesOf = bytes => makeFrames(new Uint8Array(bytes)).frames;
 
 test('keygen - prints the private key to stdout, the public key to stderr, and writes no file', async () => {
   const cwd = await tmp();
@@ -31,7 +32,7 @@ test('sign uses RESQR_SIGNING_KEY (as in CI), and the frames decode under the pu
   const { stdout: key } = await node(['keygen', '-']);
   const { stdout, stderr: log } = await node(['sign', snake, '--id', 'snake', '--version', '7'], { RESQR_SIGNING_KEY: key });
   assert.ok(!log.includes(JSON.parse(key).d), 'log never contains the private key');
-  const r = receive(stdout.trim().split('\n'), { keys: [loadKey(JSON.parse(key).x)] });
+  const r = receive(stdout.trim().split('\n'), { roots: [loadKey(JSON.parse(key).x)] });
   assert.deepEqual([r?.code?.id, r?.code?.version, r?.code?.type], ['snake', 7, 'html'], JSON.stringify(r));
 });
 
@@ -76,4 +77,24 @@ test('--gif options are validated before anything is written', async () => {
   await assert.rejects(gif(['--link', 'not a url']), /--link must be a URL/);
   for (const bad of ['x', '10', '-1', '2.5', '']) await assert.rejects(gif(['--intro', bad]), /--intro must be/, `intro ${JSON.stringify(bad)}`);
   assert.deepEqual(await readdir(dir), []);
+});
+
+test('publisher flow: a root certifies a publisher, whose programs open until revoked', async () => {
+  const dir = await tmp(), rootKey = join(dir, 'root.json'), pubKey = join(dir, 'pub.json'), cert = join(dir, 'pub.cert');
+  await node(['keygen', rootKey]);
+  const { stderr } = await node(['keygen', pubKey]);
+  const pub = stderr.trim().split(/\s+/).pop();
+  await node(['cert', '--pub', pub, '--name', 'Relief Org', '--ns', 'org.relief.', '--days', '30', '--serial', '5', '--key', rootKey, '--out', cert]);
+  const roots = [loadKey(JSON.parse(await readFile(rootKey, 'utf8')).x)];
+
+  const { stdout } = await node(['sign', snake, '--id', 'org.relief.snake', '--cert', cert, '--key', pubKey]);
+  const r = receive(stdout.trim().split('\n'), { roots });
+  assert.deepEqual([r?.code?.id, r?.code?.publisher?.name], ['org.relief.snake', 'Relief Org'], JSON.stringify(r?.error));
+
+  const { crl } = receive((await node(['crl', '--number', '1', '--revoke', '5', '--key', rootKey])).stdout.trim().split('\n'), { roots });
+  assert.deepEqual(crl, { number: 1, serials: [5] });
+  assert.match(receive(stdout.trim().split('\n'), { roots, revoked: crl.serials }).error, /revoked/);
+  await assert.rejects(node(['sign', snake, '--id', 'org.other.snake', '--cert', cert, '--key', pubKey, '--out', join(dir, 'x.bin')]).then(async () => {
+    throw new Error(receive(makeFramesOf(await readFile(join(dir, 'x.bin'))), { roots }).error);
+  }), /may not publish/);
 });

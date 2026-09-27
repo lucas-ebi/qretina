@@ -51,12 +51,16 @@ parameters:
     tags:
       - tag: 1
         name: code
-        layout: signature(64) || deflate-raw(header LF payload)
+        layout: signature(64) || cert-len(2) || cert(cert-len) || deflate-raw(header LF payload)
         header: type SP id SP version
         type: [html, json]
         id: 1*64(ALPHA / DIGIT / "_" / "." / "-")
         version: 1*15DIGIT
-        signature: Ed25519 over domain || deflate-raw(header LF payload)
+        cert-len: unsigned 16-bit, big-endian; 0 when a root key signs directly
+        cert: a whole certificate container (tag 4); id MUST begin with its namespace
+        signature: >-
+          Ed25519 over domain || everything after the signature, by a root key when cert-len is 0,
+          otherwise by the certificate's key
         domain: "resqr code\0"
       - tag: 2
         name: file
@@ -66,6 +70,25 @@ parameters:
         name: file-stored
         layout: meta LF bytes
         meta: mime SP percent-encoded(name)
+      - tag: 4
+        name: certificate
+        layout: signature(64) || header LF key(32)
+        header: serial SP not-before SP not-after SP namespace SP percent-encoded(name)
+        serial: 1*15DIGIT
+        not-before: 1*15DIGIT ; Unix time, seconds
+        not-after: 1*15DIGIT ; Unix time, seconds
+        namespace: 1*64(ALPHA / DIGIT / "_" / "." / "-")
+        key: the publisher's Ed25519 public key
+        signature: Ed25519 over domain || everything after the signature, by a root key
+        domain: "resqr cert\0"
+        validity: not-before <= receiver's clock <= not-after, and serial not in the newest revocation list
+      - tag: 5
+        name: revocation-list
+        layout: signature(64) || number LF serials
+        number: 1*15DIGIT ; a receiver keeps the list with the highest number
+        serials: serial *(SP serial), or empty
+        signature: Ed25519 over domain || everything after the signature, by a root key
+        domain: "resqr crl\0"
 
 vectors:
   mask:
@@ -81,6 +104,6 @@ vectors:
     block: 8
     stream-id: "A124DF0DA9C7784A"
     frames: # seeds 1, 2, 3
-      - "RQRF6943C/A124DF0DA9C7784A/5/34/1/+EJF2H02ED2"
-      - "RQRF6943C/A124DF0DA9C7784A/5/34/2/U8A0H9/U721"
-      - "RQRF6943C/A124DF0DA9C7784A/5/34/3/IPJG9QH39R1"
+      - "RQR64B3DF/A124DF0DA9C7784A/5/34/1/+EJF2H02ED2"
+      - "RQR64B3DF/A124DF0DA9C7784A/5/34/2/U8A0H9/U721"
+      - "RQR64B3DF/A124DF0DA9C7784A/5/34/3/IPJG9QH39R1"

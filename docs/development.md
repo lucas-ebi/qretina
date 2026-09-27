@@ -5,7 +5,7 @@
 | Path | Content |
 |---|---|
 | `spec/qretina.yaml` | Protocol parameters and test vectors; the protocol identifier is derived from them |
-| `protocol/` | Reference implementation in plain JavaScript, used by the app, the CLI and the tests |
+| `protocol/` | Reference implementation in plain JavaScript: containers and keys for the app; everything for the CLI and the tests |
 | `native/core/` | The transfer layer in C++, checked against the reference |
 | `native/` | `@qretina/native`: the C++ layer bound to the app with Nitro modules |
 | `app/` | The Expo app (Android and iOS) |

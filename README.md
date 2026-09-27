@@ -9,7 +9,7 @@ lets the receiver miss any codes and start at any point; it needs about n + 2 co
 - Protocol specified in `spec/qretina.yaml`, with a reference implementation in JavaScript and the
   transfer layer in C++.
 
-Documentation: [docs/](docs/index.md) (published on Read the Docs).
+Documentation: [docs.qretina.app](https://docs.qretina.app) (sources in [docs/](docs/index.md)).
 
 ## Build and test
 

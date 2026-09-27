@@ -1,0 +1,203 @@
+// Transfer layer (spec/qretina.yaml): base45 frames and a dense GF(2) fountain code. A Receiver turns
+// scanned strings back into containers; what a container holds is containers.js's business.
+// Pure JS with no platform APIs, so it runs unchanged in Node, Hermes and browsers.
+import { sha256 } from '@noble/hashes/sha2.js';
+
+// "QRT" + the first 6 hex digits of SHA-256 over spec/qretina.yaml `parameters` (checked by the tests).
+export const PROTOCOL = 'QRT112C90';
+export const MAX_N = 4096, MAX_LEN = 1 << 22, MAX_B = 2900;
+
+// ---- PRNG and coefficient masks --------------------------------------------
+
+export function mulberry32(seed) {
+  return () => {
+    seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), seed | 1);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return (t ^ (t >>> 14)) >>> 0;
+  };
+}
+
+// Block j is in symbol `seed` iff bit j%32 of word j/32 is set; bits beyond n are cleared.
+export function maskWords(seed, n) {
+  const rng = mulberry32(seed), w = new Uint32Array((n + 31) >>> 5);
+  for (let i = 0; i < w.length; i++) w[i] = rng();
+  if (n & 31) w[w.length - 1] &= (1 << (n & 31)) - 1;
+  return w;
+}
+
+export const mask = (seed, n, w = maskWords(seed, n)) => Uint8Array.from({ length: n }, (_, j) => (w[j >>> 5] >>> (j & 31)) & 1);
+
+export function xor(a, b) {
+  for (let i = 0; i < a.length; i++) a[i] ^= b[i];
+  return a;
+}
+
+// ---- Base45 (RFC 9285): 2 bytes -> 3 characters of the QR alphanumeric set ---
+
+const B45 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:';
+
+export function b45encode(bytes) {
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 2) {
+    let v = bytes[i];
+    if (i + 1 < bytes.length) v = v * 256 + bytes[i + 1], s += B45[v % 45] + B45[(v / 45 | 0) % 45] + B45[v / 2025 | 0];
+    else s += B45[v % 45] + B45[v / 45 | 0];
+  }
+  return s;
+}
+
+export function b45decode(s) {
+  if (s.length % 3 === 1) throw new Error('bad base45');
+  const out = new Uint8Array(Math.floor(s.length / 3) * 2 + (s.length % 3 ? 1 : 0));
+  for (let i = 0, o = 0; i < s.length; i += 3) {
+    const [a, b, c] = [0, 1, 2].map(k => i + k < s.length ? B45.indexOf(s[i + k]) : 0);
+    const v = a + b * 45 + c * 2025;
+    if (a < 0 || b < 0 || c < 0 || v > (i + 2 < s.length ? 65535 : 255)) throw new Error('bad base45');
+    if (i + 2 < s.length) out[o++] = v >> 8;
+    out[o++] = v & 255;
+  }
+  return out;
+}
+
+// ---- Frames: <protocol>/<stream id>/<n>/<len>/<seed>/<base45 symbol> ---------
+
+const FRAME = new RegExp(`^${PROTOCOL}/([0-9A-F]{16})/(\\d{1,4})/(\\d{1,7})/(\\d{1,10})/([0-9A-Z $%*+./:-]+)$`);
+
+// Returns { id, n, len, seed, data } or null. Everything is bounded before allocation.
+export function parseFrame(raw) {
+  const m = FRAME.exec(raw);
+  if (!m) return null;
+  const [n, len, seed] = [+m[2], +m[3], +m[4]], b = Math.ceil(len / n);
+  if (!(n >= 1 && n <= MAX_N && len >= 2 && len <= MAX_LEN && n <= len && b <= MAX_B && seed <= 0xFFFFFFFF)) return null;
+  if (m[5].length !== Math.floor(b / 2) * 3 + (b % 2) * 2) return null;
+  try { return { id: m[1], n, len, seed, data: b45decode(m[5]) }; } catch { return null; }
+}
+
+export const frame = (id, n, len, seed, data) => `${PROTOCOL}/${id}/${n}/${len}/${seed}/${b45encode(data)}`;
+
+// Symbols are XORs of 32-bit words; blocks are padded to a multiple of 4 bytes internally.
+const words = (bytes, w) => { const u = new Uint8Array(w * 4); u.set(bytes); return new Uint32Array(u.buffer); };
+
+export const hex = bytes => Array.from(bytes, x => x.toString(16).padStart(2, '0')).join('').toUpperCase();
+
+export const streamId = container => hex(sha256(container).subarray(0, 8));
+
+// Splits a container into n blocks of about `block` bytes; frame(seed) returns symbol `seed`.
+export function encoder(container, block = 700) {
+  const len = container.length, n = Math.ceil(len / block), b = Math.ceil(len / n), w = (b + 3) >>> 2;
+  if (len < 2 || len > MAX_LEN || n > MAX_N || b > MAX_B) {
+    throw new Error(`container is ${len} B (${n} blocks of ${b} B); limits are ${MAX_LEN} B, ${MAX_N} blocks, ${MAX_B} B/block`);
+  }
+  const data = new Uint32Array(n * w), id = streamId(container);
+  for (let j = 0; j < n; j++) data.set(words(container.subarray(j * b, (j + 1) * b), w), j * w);
+  return {
+    id, n, b, len,
+    frame(seed) {
+      const m = maskWords(seed, n), s = new Uint32Array(w);
+      for (let j = 0; j < n; j++) {
+        if (!((m[j >>> 5] >>> (j & 31)) & 1)) continue;
+        for (let k = 0, o = j * w; k < w; k++) s[k] ^= data[o + k];
+      }
+      return frame(id, n, len, seed, new Uint8Array(s.buffer, 0, b));
+    },
+  };
+}
+
+// The smallest block size near `preferred` that keeps a container of `len` bytes within MAX_N blocks.
+export const blockFor = (len, preferred = 700) => Math.max(preferred, Math.ceil(len / MAX_N));
+
+// ---- Decoder: incremental Gaussian elimination over GF(2) --------------------
+
+const low = (c, from) => { // index of the lowest set bit at or after word `from`, or -1
+  for (let i = from; i < c.length; i++) if (c[i]) return i * 32 + 31 - Math.clz32(c[i] & -c[i]);
+  return -1;
+};
+
+export class Decoder {
+  constructor(n, len) {
+    Object.assign(this, { n, len, b: Math.ceil(len / n), rank: 0, rows: new Array(n), seen: new Set() });
+    this.w = (this.b + 3) >>> 2;
+  }
+
+  // Adds symbol `seed`; returns true once all n blocks are determined.
+  add(seed, data) {
+    if (this.rank < this.n && !this.seen.has(seed) && data.length === this.b) {
+      this.seen.add(seed);
+      const c = maskWords(seed, this.n), d = words(data, this.w);
+      for (let j = low(c, 0); j >= 0; j = low(c, j >>> 5)) {
+        const r = this.rows[j];
+        if (!r) { this.rows[j] = { c, d }; this.rank++; break; }
+        xor(c, r.c);
+        xor(d, r.d);
+      }
+    }
+    return this.rank === this.n;
+  }
+
+  // Back-substitution; returns the original bytes.
+  solve() {
+    const { n, w } = this, out = new Uint32Array(n * w);
+    for (let j = n - 1; j >= 0; j--) {
+      const { c, d } = this.rows[j];
+      for (let k = low(c, (j + 1) >>> 5); k >= 0; k = low(c, (k >>> 5))) {
+        if (k > j) xor(d, out.subarray(k * w, (k + 1) * w));
+        c[k >>> 5] &= ~(1 << (k & 31));
+      }
+      out.set(d, j * w);
+    }
+    const bytes = new Uint8Array(out.buffer), res = new Uint8Array(this.len);
+    for (let j = 0; j < n; j++) res.set(bytes.subarray(j * w * 4, j * w * 4 + Math.min(this.b, this.len - j * this.b)), j * this.b);
+    return res;
+  }
+}
+
+// ---- Receiver: interleaved streams, each completed exactly once -------------
+
+export class Receiver {
+  // With `deferSolve`, a completed stream is only reported ({ ready: true }) and finish(id) then
+  // reassembles it, so an app can show that it is working first: for megabytes it takes a while.
+  constructor({ maxStreams = 8, deferSolve = false } = {}) {
+    Object.assign(this, { maxStreams, deferSolve, streams: new Map(), closed: new Map(), ready: new Map() });
+  }
+
+  hold(id, ms) { this.closed.set(id, Date.now() + ms); }
+
+  // Feeds one scanned string. Returns null (not a frame, or ignored), { id, n, len, rank }
+  // (progress), the same with `container` once complete (or `ready` with deferSolve), or with
+  // `error` if the result is corrupt.
+  push(raw) {
+    const f = parseFrame(raw);
+    if (!f || Date.now() < (this.closed.get(f.id) ?? 0)) return null;
+    let d = this.streams.get(f.id);
+    if (!d) {
+      if (this.streams.size >= this.maxStreams) this.streams.delete(this.streams.keys().next().value);
+      this.streams.set(f.id, d = new Decoder(f.n, f.len));
+    } else if (d.n !== f.n || d.len !== f.len) return null;
+    const progress = { id: f.id, n: d.n, len: d.len };
+    if (!d.add(f.seed, f.data)) return { ...progress, rank: d.rank };
+
+    this.streams.delete(f.id);
+    this.closed.set(f.id, Infinity);
+    if (!this.deferSolve) return solve(this, f.id, d);
+    this.ready.set(f.id, d);
+    return { ...progress, rank: d.n, ready: true };
+  }
+
+  // Reassembles a stream that push() reported ready.
+  finish(id) {
+    const d = this.ready.get(id);
+    if (!d) return null;
+    this.ready.delete(id);
+    return solve(this, id, d);
+  }
+}
+
+function solve(rx, id, d) {
+  const progress = { id, n: d.n, len: d.len, rank: d.n }, container = d.solve();
+  if (streamId(container) !== id) {
+    rx.closed.set(id, Date.now() + 5000);
+    return { ...progress, error: 'corrupt stream' };
+  }
+  return { ...progress, container };
+}

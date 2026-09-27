@@ -1,0 +1,43 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  protocol:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  app:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck -w @qretina/app
+      - run: npm test -w @qretina/app
+      - name: Native bindings match their spec
+        run: npm run codegen -w @qretina/native && git diff --exit-code -- native/nitrogen
+      - run: npx expo-doctor
+        working-directory: app
+      - name: Bundle for Android and iOS
+        run: npm run bundle -w @qretina/app

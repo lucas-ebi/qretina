@@ -1,0 +1,14 @@
+/* QRetina colours (tools/brand.mjs): the fox eye's steel-blue iris and near-black liner. */
+:root, [data-md-color-scheme="default"] {
+  --md-primary-fg-color: #14212B;
+  --md-primary-fg-color--light: #24557A;
+  --md-primary-fg-color--dark: #0A1E2C;
+  --md-accent-fg-color: #24557A;
+  --md-typeset-a-color: #24557A;
+}
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #0A1E2C;
+  --md-accent-fg-color: #5A91B3;
+  --md-typeset-a-color: #5A91B3;
+  --md-default-bg-color: #0A1E2C;
+}

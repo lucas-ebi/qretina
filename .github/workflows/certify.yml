@@ -1,0 +1,83 @@
+name: Certify publisher
+
+# Uses the root key (the SIGNING_KEY secret of the `signing` environment) to issue a publisher
+# certificate, or a revocation list: a looping GIF to broadcast, and crl.bin to commit as
+# app/release/crl.bin so that the next release ships it. Run it from Actions, or:
+#   gh workflow run certify.yml -f action=cert -f pub=<publisher public key> -f name="Relief Org" -f ns=org.relief.
+#   gh workflow run certify.yml -f action=crl -f number=2 -f revoke=5,9
+# then fetch the result with:  gh run download <run-id>
+#
+# A publisher creates its own key pair with `node tools/qretina.mjs keygen` and sends only the public
+# key. It signs its programs with `sign --cert <the certificate> --key <its private key>`.
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'cert (certify a publisher) or crl (publish a revocation list)'
+        type: choice
+        options: [cert, crl]
+        required: true
+      pub:
+        description: 'cert: the publisher public key (base64url)'
+        required: false
+      name:
+        description: 'cert: the publisher name shown to users'
+        required: false
+      ns:
+        description: 'cert: the id prefix the publisher may use, for example org.relief.'
+        required: false
+      days:
+        description: 'cert: days of validity'
+        required: false
+        default: '365'
+      number:
+        description: 'crl: the list number, higher than any published before'
+        required: false
+      revoke:
+        description: 'crl: revoked certificate serials, comma-separated'
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    environment: signing
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: Issue
+        # Inputs go through env vars, never into the script text, so they cannot inject commands.
+        run: |
+          mkdir -p "$RUNNER_TEMP/out"
+          if [ "$ACTION" = cert ]; then
+            node tools/qretina.mjs cert --pub "$PUB" --name "$NAME" --ns "$NS" --days "$DAYS" \
+              --out "$RUNNER_TEMP/out/publisher.cert"
+          else
+            node tools/qretina.mjs crl --number "$NUMBER" ${REVOKE:+--revoke "$REVOKE"} \
+              --gif "$RUNNER_TEMP/out/crl-$NUMBER.gif"
+            node tools/qretina.mjs crl --number "$NUMBER" ${REVOKE:+--revoke "$REVOKE"} \
+              --out "$RUNNER_TEMP/out/crl.bin"
+          fi
+        env:
+          QRETINA_SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          QRETINA_APP_KEY: ${{ secrets.APP_KEY }}
+          ACTION: ${{ inputs.action }}
+          PUB: ${{ inputs.pub }}
+          NAME: ${{ inputs.name }}
+          NS: ${{ inputs.ns }}
+          DAYS: ${{ inputs.days }}
+          NUMBER: ${{ inputs.number }}
+          REVOKE: ${{ inputs.revoke }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qretina-${{ inputs.action }}
+          path: ${{ runner.temp }}/out/
+          retention-days: 14

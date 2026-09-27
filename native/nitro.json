@@ -1,0 +1,10 @@
+{
+  "$schema": "https://nitro.margelo.com/nitro.schema.json",
+  "cxxNamespace": ["qretinanative"],
+  "ios": { "iosModuleName": "QRetinaNative" },
+  "android": { "androidNamespace": ["qretinanative"], "androidCxxLibName": "QRetinaNative" },
+  "autolinking": {
+    "Transfer": { "all": { "language": "c++", "implementationClassName": "HybridTransfer" } }
+  },
+  "ignorePaths": ["**/node_modules", "core"]
+}

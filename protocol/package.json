@@ -1,0 +1,31 @@
+{
+  "name": "@qretina/protocol",
+  "version": "0.1.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./fountain.js": {
+      "types": "./fountain.d.ts",
+      "default": "./fountain.js"
+    },
+    "./containers.js": {
+      "types": "./containers.d.ts",
+      "default": "./containers.js"
+    },
+    "./gif.js": {
+      "types": "./gif.d.ts",
+      "default": "./gif.js"
+    },
+    "./vendor/qrcode.mjs": {
+      "types": "./vendor/qrcode.d.mts",
+      "default": "./vendor/qrcode.mjs"
+    }
+  },
+  "dependencies": {
+    "@noble/ciphers": "^2.4.0",
+    "@noble/curves": "^2.4.0",
+    "@noble/hashes": "^2.4.0",
+    "fflate": "^0.8.3"
+  }
+}

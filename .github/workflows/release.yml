@@ -1,0 +1,119 @@
+name: Release
+
+# Builds the app with the keys of this repository fixed in it:
+#   TRUSTED_KEYS  repository variable: root public keys
+#   APP_KEYS      secret of the `signing` environment: sealing keys, current first
+#
+# `apk` builds an Android APK here, for testing and sideloading:
+#   gh workflow run release.yml -f target=apk     then   gh run download <run-id>
+# It is signed with the development key, unless the `signing` environment holds a keystore:
+#   ANDROID_KEYSTORE (base64 of the .jks file), ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS
+# With -f publish=true it is published as the latest GitHub release, which the download page on
+# qretina.app links to; that needs the keystore. The log prints the certificate's SHA-256, to set
+# as the ANDROID_CERT_SHA256 variable so that the countdown link opens the app.
+# `stores` starts EAS builds for Google Play and the App Store; EAS holds the store signing keys.
+# It needs EXPO_TOKEN (a secret of the `signing` environment), and TRUSTED_KEYS and APP_KEYS set
+# as EAS environment variables for the production profile, since EAS builds in its own cloud.
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'apk (Android test build here) or stores (EAS production builds)'
+        type: choice
+        options: [apk, stores]
+        required: true
+      publish:
+        description: 'apk: publish as the latest GitHub release (needs the keystore)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    if: inputs.target == 'apk'
+    runs-on: ubuntu-latest
+    environment: signing
+    permissions:
+      contents: write # to publish a release
+    env:
+      HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE != '' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - run: npm ci
+      - run: npx expo prebuild --platform android --no-install
+        working-directory: app
+        env:
+          QRETINA_RELEASE: '1'
+          TRUSTED_KEYS: ${{ vars.TRUSTED_KEYS }}
+          APP_KEYS: ${{ secrets.APP_KEYS }}
+      - run: ./gradlew assembleRelease --no-daemon
+        working-directory: app/android
+        env:
+          QRETINA_RELEASE: '1'
+          TRUSTED_KEYS: ${{ vars.TRUSTED_KEYS }}
+          APP_KEYS: ${{ secrets.APP_KEYS }}
+      - name: Sign with the release key
+        if: env.HAS_KEYSTORE == 'true'
+        run: |
+          echo "$ANDROID_KEYSTORE" | base64 -d > "$RUNNER_TEMP/release.jks"
+          apksigner=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)/apksigner
+          for apk in app/android/app/build/outputs/apk/release/*.apk; do
+            "$apksigner" sign --ks "$RUNNER_TEMP/release.jks" --ks-pass env:ANDROID_KEYSTORE_PASSWORD \
+              --ks-key-alias "$ANDROID_KEY_ALIAS" "$apk"
+            "$apksigner" verify --print-certs "$apk" | grep -i 'SHA-256'
+          done
+          rm "$RUNNER_TEMP/release.jks"
+        env:
+          ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      - name: Publish
+        if: inputs.publish
+        run: |
+          [ "$HAS_KEYSTORE" = true ] || { echo "publishing needs the release keystore (ANDROID_KEYSTORE)" >&2; exit 1; }
+          version=$(cd app && npx expo config --json | node -pe "JSON.parse(require('fs').readFileSync(0)).version")
+          cp app/android/app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/QRetina-$version.apk"
+          gh release create "android-$version-$GITHUB_RUN_NUMBER" "$RUNNER_TEMP/QRetina-$version.apk" \
+            --title "QRetina $version for Android" --latest \
+            --notes "Install on Android by opening the APK. QRetina works offline once installed."
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qretina-apk
+          path: app/android/app/build/outputs/apk/release/*.apk
+          retention-days: 30
+
+  stores:
+    if: inputs.target == 'stores'
+    runs-on: ubuntu-latest
+    environment: signing
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx eas-cli@latest build --platform all --profile production --non-interactive --no-wait
+        working-directory: app
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          QRETINA_RELEASE: '1'
+          TRUSTED_KEYS: ${{ vars.TRUSTED_KEYS }}
+          APP_KEYS: ${{ secrets.APP_KEYS }}

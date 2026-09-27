@@ -1,0 +1,125 @@
+# QRetina transfer protocol: normative parameters.
+#
+# The protocol identifier is "QRT" followed by the first six hexadecimal digits, in upper case, of
+# SHA-256 over the canonical JSON (RFC 8785) of `parameters`. Any change to `parameters` gives a new
+# identifier, and receivers ignore frames that carry another one. Comments, formatting and
+# `vectors` do not enter the digest. The explanation of these parameters is in docs/protocol.md.
+
+parameters:
+  revision: 1
+
+  frame:
+    grammar: # ABNF (RFC 5234)
+      - frame     = protocol "/" stream-id "/" n "/" len "/" seed "/" symbol
+      - protocol  = "QRT" 6HEXDIG        ; upper case
+      - stream-id = 16HEXDIG             ; upper case
+      - n         = 1*4DIGIT
+      - len       = 1*7DIGIT
+      - seed      = 1*10DIGIT
+      - symbol    = 1*base45-char        ; RFC 9285
+    limits:
+      max-n: 4096
+      max-len: 4194304
+      max-block: 2900
+    constraints:
+      - 1 <= n <= max-n
+      - 2 <= len <= max-len
+      - n <= len
+      - 0 <= seed <= 4294967295
+      - b = ceil(len / n) <= max-block
+      - symbol decodes to exactly b bytes
+    stream-id: the first 8 bytes of SHA-256(container)
+
+  code:
+    prng:
+      name: mulberry32
+      state: 32-bit, initialised to seed
+      step:
+        - state = state + 0x6D2B79F5
+        - t = imul(state xor (state >>> 15), state or 1)
+        - t = (t + imul(t xor (t >>> 7), t or 61)) xor t
+        - output (t xor (t >>> 14)) as unsigned 32-bit
+    mask: >-
+      word i of the mask is the (i+1)-th prng output, for i = 0 .. ceil(n / 32) - 1;
+      block j is selected iff bit (j mod 32) of word floor(j / 32) is set, for j < n
+    blocks: block j = container[j*b .. j*b + b), the last one zero-padded
+    symbol: exclusive-or of the selected blocks
+    acceptance: the reconstructed container is accepted only if its stream-id matches
+
+  containers:
+    compression: deflate-raw (RFC 1951)
+    tags:
+      - tag: 1
+        name: code
+        layout: signature(64) || cert-len(2) || cert(cert-len) || deflate-raw(header LF payload)
+        header: type SP id SP version
+        type: [html, json]
+        id: 1*64(ALPHA / DIGIT / "_" / "." / "-")
+        version: 1*15DIGIT
+        cert-len: unsigned 16-bit, big-endian; 0 when a root key signs directly
+        cert: a whole certificate container (tag 4); id MUST begin with its namespace
+        signature: >-
+          Ed25519 over domain || everything after the signature, by a root key when cert-len is 0,
+          otherwise by the certificate's key
+        domain: "qretina code\0"
+      - tag: 2
+        name: file
+        layout: deflate-raw(meta LF bytes)
+        meta: mime SP percent-encoded(name)
+      - tag: 3
+        name: file-stored
+        layout: meta LF bytes
+        meta: mime SP percent-encoded(name)
+      - tag: 4
+        name: certificate
+        layout: signature(64) || header LF key(32)
+        header: serial SP not-before SP not-after SP namespace SP percent-encoded(name)
+        serial: 1*15DIGIT
+        not-before: 1*15DIGIT ; Unix time, seconds
+        not-after: 1*15DIGIT ; Unix time, seconds
+        namespace: 1*64(ALPHA / DIGIT / "_" / "." / "-")
+        key: the publisher's Ed25519 public key
+        signature: Ed25519 over domain || everything after the signature, by a root key
+        domain: "qretina cert\0"
+        validity: not-before <= receiver's clock <= not-after, and serial not in the newest revocation list
+      - tag: 5
+        name: revocation-list
+        layout: signature(64) || number LF serials
+        number: 1*15DIGIT ; a receiver keeps the list with the highest number
+        serials: serial *(SP serial), or empty
+        signature: Ed25519 over domain || everything after the signature, by a root key
+        domain: "qretina crl\0"
+      - tag: 6
+        name: sealed
+        layout: key-id(8) || nonce(24) || XChaCha20-Poly1305(enc-key, nonce, inner, ad = 0x06 || key-id)
+        inner: a whole container of any type; at most two sealed layers
+        key: 32 bytes, held in advance by sender and receiver
+        key-id: the first 8 bytes of SHA-256("qretina key\0" || key)
+        enc-key: HMAC-SHA-256(key, "qretina enc")
+        nonce: the first 24 bytes of HMAC-SHA-256(HMAC-SHA-256(key, "qretina iv"), inner)
+    passphrase-key: scrypt(UTF-8 passphrase, salt "qretina psk", N 32768, r 8, p 1, 32 bytes)
+
+vectors:
+  mask:
+    seed: 12345
+    n: 64
+    bits: "1010001100011110111100110101111100000000100010101110000101110010"
+  base45:
+    - { text: "ietf!", base45: "QED8WEX0" }
+    - { text: "base-45", base45: "UJCLQE7W581" }
+    - { text: "Hello!!", base45: "%69 VD92EX0" }
+  stream: # the file container of "hello.txt" (text/plain, "Hello, QRetina!"), in blocks of at most 8 bytes
+    container: "022B49AD28D12FC849CCCC53C848CDC9C9D72BA928E1F200B1741482528B03831401"
+    block: 8
+    stream-id: "A124DF0DA9C7784A"
+    frames: # seeds 1, 2, 3
+      - "QRT112C90/A124DF0DA9C7784A/5/34/1/+EJF2H02ED2"
+      - "QRT112C90/A124DF0DA9C7784A/5/34/2/U8A0H9/U721"
+      - "QRT112C90/A124DF0DA9C7784A/5/34/3/IPJG9QH39R1"
+  sealed: # the stream container above, sealed under the key 0x42 repeated 32 times
+    key: "4242424242424242424242424242424242424242424242424242424242424242"
+    key-id: "231EE7F1FF79FDFA"
+    container: "06231EE7F1FF79FDFA72CCAE76E667D161A3ADEA8CF62CD90ACAAA6A90628520D48FA2A8A97BA92264F01435B3BF4A93FDD38281940398905F277BCA285A41A7DE78DA6B29F1DBBA8F9190F62F4E91FF66DE73"
+  passphrase-key:
+    passphrase: "correct horse battery staple"
+    key: "9F60CB5ADB0FD8A41E2AE377EA703F46ED1616CD18ACD3A489247FFB301D85D5"

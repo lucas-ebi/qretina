@@ -5,12 +5,17 @@
   "private": true,
   "type": "module",
   "workspaces": [
-    "protocol"
+    "protocol",
+    "app"
   ],
   "scripts": {
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs && npm test -w @resqr/app",
+    "check": "npm test && npm run typecheck -w @resqr/app"
   },
   "devDependencies": {
     "yaml": "^2.9.1"
+  },
+  "overrides": {
+    "react": "19.2.3"
   }
 }

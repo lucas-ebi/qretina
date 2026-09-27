@@ -5,10 +5,22 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./fountain.js": "./fountain.js",
-    "./containers.js": "./containers.js",
-    "./gif.js": "./gif.js",
-    "./vendor/qrcode.mjs": "./vendor/qrcode.mjs"
+    "./fountain.js": {
+      "types": "./fountain.d.ts",
+      "default": "./fountain.js"
+    },
+    "./containers.js": {
+      "types": "./containers.d.ts",
+      "default": "./containers.js"
+    },
+    "./gif.js": {
+      "types": "./gif.d.ts",
+      "default": "./gif.js"
+    },
+    "./vendor/qrcode.mjs": {
+      "types": "./vendor/qrcode.d.mts",
+      "default": "./vendor/qrcode.mjs"
+    }
   },
   "dependencies": {
     "@noble/ciphers": "^2.4.0",
